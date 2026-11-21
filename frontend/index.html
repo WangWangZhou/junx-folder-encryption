@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>文件夹隐藏工具</title>
+    <link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+<div class="app">
+    <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="tabA" data-i18n="tab.a" type="button">方案A</button>
+        <button class="tab" data-tab="tabD" data-i18n="tab.d" type="button">方案D</button>
+        <button class="tab" data-tab="tabGeneral" data-i18n="tab.general" type="button">常规</button>
+        <button class="tab" data-tab="tabAbout" data-i18n="tab.about" type="button">关于</button>
+    </div>
+
+    <div class="content">
+        <section class="panel active" id="tabA">
+            <fieldset class="group">
+                <legend data-i18n="group.folder">文件夹设置</legend>
+                <div class="field-row">
+                    <label for="targetPathA" data-i18n="field.targetPath">目标文件夹路径</label>
+                    <input id="targetPathA" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
+                </div>
+                <div class="field-row">
+                    <label for="newName" data-i18n="field.newName">新的文件夹名称</label>
+                    <input id="newName" type="text" placeholder="选填：加密前先改为该名称" data-i18n-placeholder="placeholder.newName" autocomplete="off"/>
+                </div>
+            </fieldset>
+            <div class="actions">
+                <button id="encryptBtnA" class="btn" data-i18n="btn.encrypt" type="button">加密</button>
+                <button id="decryptBtnA" class="btn" data-i18n="btn.decrypt" type="button">解密</button>
+            </div>
+        </section>
+
+        <section class="panel" id="tabD">
+            <fieldset class="group">
+                <legend data-i18n="group.acl">ACL 权限限制</legend>
+                <div class="field-row">
+                    <label for="targetPathD" data-i18n="field.targetPath">目标文件夹路径</label>
+                    <input id="targetPathD" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
+                </div>
+            </fieldset>
+            <div class="actions">
+                <button id="encryptBtnD" class="btn" data-i18n="btn.encrypt" type="button">加密</button>
+                <button id="decryptBtnD" class="btn" data-i18n="btn.decrypt" type="button">解密</button>
+            </div>
+        </section>
+
+        <section class="panel" id="tabGeneral">
+            <fieldset class="group">
+                <legend data-i18n="group.general">常规设置</legend>
+                <div class="field-row">
+                    <label for="langSelect" data-i18n="field.language">显示语言:</label>
+                    <select id="langSelect" class="lang-select">
+                        <option value="zh-CN">简体中文</option>
+                        <option value="en">English</option>
+                        <option value="ja">日本語</option>
+                    </select>
+                </div>
+                <div class="field-row checkbox-row">
+                    <label class="checkbox-label">
+                        <input id="autoStartChk" type="checkbox"/>
+                        <span data-i18n="chk.autoStart">开机启动</span>
+                    </label>
+                    <label class="checkbox-label" id="runAsAdminLabel">
+                        <input id="runAsAdminChk" type="checkbox" disabled/>
+                        <span data-i18n="chk.runAsAdmin">以管理员身份启动</span>
+                    </label>
+                    <span id="adminInfo" class="info-icon" data-i18n-title="tip.runAsAdmin" title="启用后程序启动时将请求管理员权限（Windows 会弹出确认提示）。">ⓘ</span>
+                </div>
+            </fieldset>
+            <div class="actions">
+                <button id="clearLogBtn" class="btn" data-i18n="btn.clearLog" type="button">清空日志</button>
+            </div>
+        </section>
+
+        <section class="panel about" id="tabAbout">
+            <fieldset class="group">
+                <legend data-i18n="group.about">关于</legend>
+                <p class="about-title" data-i18n="about.title">文件夹隐藏工具 1.2.0</p>
+                <p data-i18n-html="about.a"><b>方案A</b>：为目录名追加 <code>..</code> 并设置隐藏属性，资源管理器双击会报“位置不可用”。</p>
+                <p data-i18n-html="about.d"><b>方案D</b>：备份目录权限后拒绝当前用户列目录；双击无法打开，解密时从目录内 <code>.DS_Store</code> 恢复原权限。</p>
+                <p class="about-warn" data-i18n="about.warn">注意：这不是加密保护。管理员或拥有权限的账户仍可修改 ACL。操作前请备份。</p>
+                <p class="about-note" data-i18n="about.note">元数据密钥由内置字符串派生。</p>
+            </fieldset>
+        </section>
+
+        <fieldset class="group log-group" id="logGroup">
+            <legend data-i18n="group.log">日志</legend>
+            <div class="log" id="logBox"></div>
+        </fieldset>
+    </div>
+
+    <div class="bottom">
+        <span class="hint" id="hint">方案A：解密请填写带 .. 的完整路径。</span>
+    </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A my-folder-encryption application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/my-folder-encryption.exe %u
+Terminal=false
+Type=Application
+Icon=my-folder-encryption.exe
+Categories=Utility;
+StartupWMClass=my-folder-encryption.exe
+
+ 

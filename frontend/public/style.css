@@ -1,0 +1,288 @@
+:root {
+    --bg: #f0f0f0;
+    --panel: #ffffff;
+    --border: #b4b4b4;
+    --line: #d4d4d4;
+    --text: #000000;
+    --muted: #555555;
+    font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 12px;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 0 6px 5px;
+    overflow: hidden;
+}
+
+.tabs {
+    display: flex;
+    align-items: flex-end;
+    flex: 0 0 auto;
+    height: 25px;
+    padding-left: 4px;
+    border-bottom: 1px solid var(--line);
+}
+
+.tab {
+    height: 22px;
+    padding: 0 11px;
+    border: 1px solid transparent;
+    border-bottom: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    cursor: default;
+}
+
+.tab.active {
+    position: relative;
+    top: 1px;
+    background: var(--bg);
+    border-color: var(--line);
+    border-bottom-color: var(--bg);
+}
+
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    padding: 6px 0 0;
+}
+
+.panel {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.panel.active {
+    display: flex;
+}
+
+.group {
+    margin: 0;
+    padding: 6px 8px 7px;
+    border: 1px solid var(--line);
+    border-radius: 0;
+}
+
+.group legend {
+    padding: 0 4px;
+    color: var(--text);
+    font-size: 11px;
+}
+
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.field-row label {
+    flex: 0 0 84px;
+    color: var(--text);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+input[type="text"],
+select {
+    flex: 1;
+    min-width: 0;
+    height: 23px;
+    padding: 2px 5px;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+}
+
+input[type="text"]:focus,
+select:focus {
+    outline: 1px solid #4a8cf7;
+    outline-offset: -2px;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.btn {
+    height: 23px;
+    padding: 0 14px;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: linear-gradient(#ffffff, #f2f2f2);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+
+.btn:hover {
+    background: linear-gradient(#ffffff, #e8f0fb);
+    border-color: #7ea6d9;
+}
+
+.btn:active {
+    background: #dfe8f3;
+}
+
+.btn:focus-visible {
+    outline: 1px dotted #333333;
+    outline-offset: -4px;
+}
+
+.about {
+    flex: 1;
+    overflow: auto;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.about .group {
+    padding-top: 4px;
+    padding-bottom: 4px;
+}
+
+.about p {
+    margin: 3px 0;
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+.about-title {
+    font-weight: 600;
+}
+
+.about-warn {
+    color: #a00020;
+}
+
+.about-note {
+    color: var(--muted);
+}
+
+.about code,
+.hint code {
+    font-family: Consolas, "Courier New", monospace;
+}
+
+.log-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 70px;
+}
+
+.log {
+    flex: 1;
+    overflow: auto;
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 11px;
+    line-height: 1.45;
+    color: #222222;
+}
+
+.log-line {
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.log-line.error {
+    color: #b00020;
+}
+
+.log-line.warn {
+    color: #9a5b00;
+}
+
+.lang-select {
+    flex: 0 0 110px;
+    height: 23px;
+    padding: 0 2px;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+}
+
+.checkbox-row {
+    gap: 12px;
+}
+
+.checkbox-row label {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.checkbox-row input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    accent-color: #0067c0;
+}
+
+.checkbox-row label.is-disabled {
+    color: #7a7a7a;
+}
+
+.info-icon {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1;
+    cursor: help;
+}
+
+.bottom {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    padding-top: 5px;
+}
+
+.hint {
+    flex: 1;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
