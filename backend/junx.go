@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -39,6 +38,33 @@ const (
 	junxMaxManifest = 64 << 20
 	junxChunkSize   = 1 << 20
 )
+
+// 容器头第 9 字节的类型标记。仅用于添加任务时提前判断，
+// 实际还原始终以加密清单里的 Kind 为准。
+const (
+	junxMarkUnknown byte = 0x00
+	junxMarkFile    byte = 0x01
+	junxMarkFolder  byte = 0x02
+)
+
+// markForKind 把清单类型映射为容器头标记。
+func markForKind(kind string) byte {
+	if kind == junxFolderKind {
+		return junxMarkFolder
+	}
+	if kind == junxFileKind {
+		return junxMarkFile
+	}
+	return junxMarkUnknown
+}
+
+// normalizeMark 只接受已知取值，其余一律视为未知。
+func normalizeMark(mark byte) byte {
+	if mark == junxMarkFile || mark == junxMarkFolder {
+		return mark
+	}
+	return junxMarkUnknown
+}
 
 // junxProgressFunc 由调用方注入进度回调，避免 crypto 逻辑直接依赖 UI。
 type junxProgressFunc func(phase string, percent int, current string)
@@ -250,7 +276,8 @@ func packJunxPayload(manifest junxManifest, body []byte) ([]byte, error) {
 }
 
 // sealJunxData 用 AES-256-GCM 封装明文载荷，输出完整 .junx 字节。
-func sealJunxData(payload []byte) ([]byte, error) {
+// mark 写入容器头第 9 字节，明文可见但不参与认证，解密时只作为提示。
+func sealJunxData(payload []byte, mark byte) ([]byte, error) {
 	block, err := aes.NewCipher(junxKey())
 	if err != nil {
 		return nil, err
@@ -264,52 +291,55 @@ func sealJunxData(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	out := make([]byte, 0, len(junxMagic)+len(nonce)+len(payload)+gcm.Overhead())
+	out := make([]byte, 0, len(junxMagic)+1+len(nonce)+len(payload)+gcm.Overhead())
 	out = append(out, junxMagic...)
+	out = append(out, normalizeMark(mark))
 	out = append(out, nonce...)
 	return gcm.Seal(out, nonce, payload, nil), nil
 }
 
-// openJunxData 校验文件头并解密，返回清单与内容区。
-func openJunxData(data []byte) (junxManifest, []byte, error) {
+// openJunxData 校验文件头并解密，返回清单、内容区与类型标记。
+// 标记在密文之外，可能被篡改，调用方必须以清单里的 Kind 为准。
+func openJunxData(data []byte) (junxManifest, []byte, byte, error) {
 	var manifest junxManifest
 
 	block, err := aes.NewCipher(junxKey())
 	if err != nil {
-		return manifest, nil, err
+		return manifest, nil, junxMarkUnknown, err
 	}
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		return manifest, nil, err
+		return manifest, nil, junxMarkUnknown, err
 	}
 
-	header := len(junxMagic) + gcm.NonceSize()
+	header := len(junxMagic) + 1 + gcm.NonceSize()
 	if len(data) < header+gcm.Overhead() {
-		return manifest, nil, fmt.Errorf("文件过短，不是有效的 .junx 文件")
+		return manifest, nil, junxMarkUnknown, fmt.Errorf("文件过短，不是有效的 .junx 文件")
 	}
 	if string(data[:len(junxMagic)]) != junxMagic {
-		return manifest, nil, fmt.Errorf("文件头不匹配，不是本工具生成的 .junx 文件")
+		return manifest, nil, junxMarkUnknown, fmt.Errorf("文件头不匹配，不是本工具生成的 .junx 文件")
 	}
-	nonce := data[len(junxMagic):header]
+	mark := normalizeMark(data[len(junxMagic)])
+	nonce := data[len(junxMagic)+1 : header]
 	plain, err := gcm.Open(nil, nonce, data[header:], nil)
 	if err != nil {
-		return manifest, nil, fmt.Errorf("解密失败：文件已损坏或被篡改")
+		return manifest, nil, junxMarkUnknown, fmt.Errorf("解密失败：文件已损坏或被篡改")
 	}
 	if len(plain) < 4 {
-		return manifest, nil, fmt.Errorf("载荷过短，目录清单缺失")
+		return manifest, nil, junxMarkUnknown, fmt.Errorf("载荷过短，目录清单缺失")
 	}
 
 	manifestLen := int(binary.BigEndian.Uint32(plain[:4]))
 	if manifestLen <= 0 || manifestLen > junxMaxManifest || 4+manifestLen > len(plain) {
-		return manifest, nil, fmt.Errorf("目录清单长度异常")
+		return manifest, nil, mark, fmt.Errorf("目录清单长度异常")
 	}
 	if err := json.Unmarshal(plain[4:4+manifestLen], &manifest); err != nil {
-		return manifest, nil, fmt.Errorf("目录清单格式损坏: %w", err)
+		return manifest, nil, mark, fmt.Errorf("目录清单格式损坏: %w", err)
 	}
 	if manifest.Kind != junxFileKind && manifest.Kind != junxFolderKind {
-		return manifest, nil, fmt.Errorf("不支持的容器类型: %s", manifest.Kind)
+		return manifest, nil, mark, fmt.Errorf("不支持的容器类型: %s", manifest.Kind)
 	}
-	return manifest, plain[4+manifestLen:], nil
+	return manifest, plain[4+manifestLen:], mark, nil
 }
 
 // validateJunxManifest 校验清单中的偏移与长度，防止越界读取。
@@ -554,12 +584,4 @@ func deleteOriginalTextFor(locale, name string, isFolder bool) deleteOriginalTex
 			No:       "保留",
 		}
 	}
-}
-
-// errJunxKindMismatch 在页面与容器类型不一致时给出明确提示。
-func errJunxKindMismatch(want, got string) error {
-	if want == junxFileKind {
-		return errors.New("这是文件夹容器，请到「文件夹加密」页解密")
-	}
-	return errors.New("这是文件容器，请到「文件加密」页解密")
 }

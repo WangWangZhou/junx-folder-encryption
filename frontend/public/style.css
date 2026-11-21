@@ -7,6 +7,8 @@
     --muted: #555555;
     /* 输入框 placeholder 与日志初始行/空态共用同一个灰，保证视觉一致 */
     --placeholder: #7a7a7a;
+    /* 输入框禁用态底色，批量拖入区复用同一个值 */
+    --input-disabled: #f7f7f7;
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
@@ -29,9 +31,19 @@ body {
 .app {
     position: relative;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    gap: 6px;
     height: 100vh;
     padding: 0 6px 5px;
+    overflow: hidden;
+}
+
+/* 右侧主体：一级标签 + 面板 + 底部提示。批量面板展开时它保持原有宽度。 */
+.app-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
 }
 
@@ -229,6 +241,12 @@ select {
 input[type="text"]::placeholder {
     color: var(--placeholder);
     opacity: 1;
+}
+
+input[type="text"]:disabled {
+    background: var(--input-disabled);
+    color: var(--placeholder);
+    border-color: var(--line);
 }
 
 input[type="text"]:focus,
@@ -583,4 +601,375 @@ select:focus {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* ================= 批量任务 ================= */
+
+/* 左侧批量面板：156px 宽，展开时窗口同步变宽，右侧内容宽度保持不变 */
+.batch-panel {
+    flex: 0 0 156px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    padding: 4px;
+    border: 1px solid var(--line);
+    background: var(--panel);
+}
+
+.batch-head {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 0 0 auto;
+}
+
+.batch-title {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.batch-views {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 2px;
+}
+
+.view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.view-btn.active {
+    border-color: #7ea6d9;
+    background: #dfe8f3;
+    color: #0067c0;
+}
+
+.batch-mode {
+    flex: 0 0 auto;
+    min-height: 15px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.batch-tasks {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.batch-tasks:empty {
+    display: none;
+}
+
+.batch-tasks.grid {
+    display: grid;
+    grid-template-columns: repeat(4, 30px);
+    /* 行距留给上方外溢 7px 的删除角标 */
+    gap: 12px 6px;
+    align-content: start;
+    justify-content: start;
+    /* 首行与最后一列的角标会溢出方块，靠内边距避免被滚动容器裁掉 */
+    padding: 7px 7px 0 0;
+}
+
+.batch-tasks.list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.batch-empty {
+    color: var(--placeholder);
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 2px;
+}
+
+/* 小图标：30×30，运行中从底部按百分比填充并带流动斜纹 */
+.task-tile {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--border);
+    background: #f2f2f2;
+    /* 删除角标有 7px 露在框外，不能裁剪 */
+    overflow: visible;
+}
+
+.task-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0;
+    background-color: #0067c0;
+    background-image: repeating-linear-gradient(
+        45deg,
+        rgba(255, 255, 255, 0.3) 0 3px,
+        rgba(255, 255, 255, 0) 3px 6px
+    );
+    background-size: 200% 200%;
+    animation: task-stripes 0.9s linear infinite;
+    transition: height 0.12s linear;
+}
+
+@keyframes task-stripes {
+    from {
+        background-position: 0 0;
+    }
+    to {
+        background-position: 12px 0;
+    }
+}
+
+.task-tile.running {
+    border-color: #0067c0;
+}
+
+.task-tile.error {
+    border-color: #b00020;
+}
+
+.task-tile.error::after {
+    content: "!";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #b00020;
+    font-weight: 600;
+}
+
+.task-tile.paused {
+    border-style: dashed;
+}
+
+.task-tile.paused .task-fill {
+    display: none;
+}
+
+.task-tile.paused::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-45%, -50%);
+    border-left: 7px solid #9a9a9a;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+}
+
+.task-hover {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.35);
+}
+
+.task-tile:hover .task-hover {
+    display: flex;
+}
+
+.task-tile:hover {
+    z-index: 1;
+}
+
+.task-buttons {
+    display: inline-flex;
+    align-items: center;
+}
+
+/* 暂停：播放器经典双竖线 */
+.task-pause {
+    position: relative;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.task-pause::before,
+.task-pause::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    width: 3px;
+    height: 10px;
+    background: #ffffff;
+}
+
+.task-pause::before {
+    left: 3px;
+}
+
+.task-pause::after {
+    right: 3px;
+}
+
+/* 暂停后同一按钮变为播放三角，用于恢复 */
+.task-pause.resume {
+    width: 0;
+    height: 0;
+    border-left: 9px solid #ffffff;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+}
+
+.task-pause.resume::before,
+.task-pause.resume::after {
+    display: none;
+}
+
+/* 删除：实心圆 + 叉，停在小图标右上角 */
+.task-del {
+    position: absolute;
+    /* 12px 圆偏移 7px：约 84% 面积在方块之外 */
+    top: -7px;
+    right: -7px;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #c62828;
+    color: #ffffff;
+    font-size: 10px;
+    line-height: 12px;
+    text-align: center;
+    cursor: pointer;
+}
+
+/* 列表视图：单列普通按钮样式行 */
+.task-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 26px;
+    padding: 0 4px;
+    border: 1px solid var(--line);
+    background: linear-gradient(#ffffff, #f2f2f2);
+    font-size: 12px;
+}
+
+.task-row.running {
+    border-color: #0067c0;
+}
+
+.task-row.error {
+    border-color: #b00020;
+}
+
+.task-row.error .task-name {
+    color: #b00020;
+}
+
+.task-row.paused {
+    color: #8a8a8a;
+    border-style: dashed;
+}
+
+.task-row.paused .task-name::before {
+    content: "B6";
+    margin-right: 3px;
+    color: #b0b0b0;
+    font-size: 9px;
+}
+
+.task-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.task-bar {
+    display: inline-block;
+    flex: 0 0 44px;
+    height: 8px;
+    border: 1px solid var(--border);
+    background: #ffffff;
+}
+
+.task-bar-fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    background: #0067c0;
+    transition: width 0.12s linear;
+}
+
+.task-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    margin-left: 2px;
+}
+
+.task-row:hover .task-actions {
+    display: inline-flex;
+}
+
+.task-actions .task-pause::before,
+.task-actions .task-pause::after {
+    background: #555555;
+}
+
+.task-actions .task-pause.resume {
+    border-left-color: #555555;
+}
+
+.task-actions .task-del {
+    position: static;
+    margin-left: 2px;
+    line-height: 11px;
+}
+
+/* 批量按钮：位于操作行最左，展开时保持按下态 */
+.batch-toggle {
+    margin-right: auto;
+}
+
+.batch-toggle.active {
+    background: #dfe8f3;
+    border-color: #7ea6d9;
+}
+
+/* 批量模式：源路径输入框变为三倍高的拖入区 */
+.field-row input.batch-drop {
+    height: 69px;
+    background: var(--input-disabled);
+    color: var(--placeholder);
+}
+
+/* 常规设置右上角的「清空日志」 */
+.general-group {
+    position: relative;
+}
+
+.group-corner {
+    position: absolute;
+    top: 3px;
+    right: 6px;
+}
+
+/* 批量设置：两个开关行更紧凑 */
+.batch-setting-row {
+    margin-top: 2px;
 }

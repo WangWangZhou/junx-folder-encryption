@@ -95,6 +95,83 @@ export class JunxProgress {
 }
 
 /**
+ * PathProbe 是批量任务添加前的只读探测结果。
+ * 前端据此做类型分流（.junx → 解密任务）、同名拦截与嵌套判断。
+ */
+export class PathProbe {
+    /**
+     * Creates a new PathProbe instance.
+     * @param {Partial<PathProbe>} [$$source = {}] - The source object to create the PathProbe.
+     */
+    constructor($$source = {}) {
+        if (!("Path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Path"] = "";
+        }
+        if (!("Exists" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["Exists"] = false;
+        }
+        if (!("IsDir" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["IsDir"] = false;
+        }
+        if (!("Kind" in $$source)) {
+            /**
+             * file / folder / junx / other / missing
+             * @member
+             * @type {string}
+             */
+            this["Kind"] = "";
+        }
+        if (!("ContainerKind" in $$source)) {
+            /**
+             * 仅 junx：file / folder / unknown，来自容器头标记
+             * @member
+             * @type {string}
+             */
+            this["ContainerKind"] = "";
+        }
+        if (!("OutputPath" in $$source)) {
+            /**
+             * 加密产物路径：源同目录 + 源名 + .junx
+             * @member
+             * @type {string}
+             */
+            this["OutputPath"] = "";
+        }
+        if (!("OutputExists" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["OutputExists"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PathProbe instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PathProbe}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PathProbe(/** @type {Partial<PathProbe>} */($$parsedSource));
+    }
+}
+
+/**
  * PinResult 是 PIN 操作的结果码与最新状态。
  */
 export class PinResult {

@@ -446,14 +446,10 @@ func (s *FolderService) EncryptFolderToJunx(path, outputName string, deleteOrigi
 	return s.encryptToJunx(path, junxFolderKind, outputName, deleteOriginal, locale)
 }
 
-// DecryptFileFromJunx 解密文件容器，输出到 .junx 所在目录，重名自动追加序号。
-func (s *FolderService) DecryptFileFromJunx(junxPath string) error {
-	return s.decryptFromJunx(junxPath, junxFileKind)
-}
-
-// DecryptFolderFromJunx 解密文件夹容器，重建目录树。
-func (s *FolderService) DecryptFolderFromJunx(junxPath string) error {
-	return s.decryptFromJunx(junxPath, junxFolderKind)
+// DecryptJunx 通用解密：读取容器清单后自动决定还原单个文件还是整个目录树。
+// 两个加密页与批量解密都调用它，用户无需事先知道容器里装的是什么。
+func (s *FolderService) DecryptJunx(junxPath string) error {
+	return s.decryptFromJunx(junxPath)
 }
 
 // encryptToJunx 加密主流程：扫描 → 打包 → 封装 → 写盘 → 回读校验 → 可选删除源。
@@ -510,7 +506,7 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 		return s.fail(err)
 	}
 	emit("encrypt", 74, filepath.Base(absSrc))
-	sealed, err := sealJunxData(plain)
+	sealed, err := sealJunxData(plain, markForKind(payload.manifest.Kind))
 	if err != nil {
 		return s.fail(err)
 	}
@@ -556,7 +552,7 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 }
 
 // decryptFromJunx 解密主流程：读容器 → 校验类型 → 按 manifest 重建。
-func (s *FolderService) decryptFromJunx(junxPath, wantKind string) error {
+func (s *FolderService) decryptFromJunx(junxPath string) error {
 	if err := s.guardUnlocked(); err != nil {
 		return err
 	}
@@ -587,12 +583,13 @@ func (s *FolderService) decryptFromJunx(junxPath, wantKind string) error {
 	}
 	emit("decrypt", 30, filepath.Base(absPath))
 
-	manifest, body, err := openJunxData(data)
+	manifest, body, mark, err := openJunxData(data)
 	if err != nil {
 		return s.fail(err)
 	}
-	if manifest.Kind != wantKind {
-		return s.fail(errJunxKindMismatch(wantKind, manifest.Kind))
+	// 标记只作提示：与清单不一致时以清单为准，并记录一次告警。
+	if mark != junxMarkUnknown && mark != markForKind(manifest.Kind) {
+		s.appendLog("WARN", "容器类型标记与内容不一致，已按清单还原")
 	}
 
 	emit("extract", 50, manifest.Name)
@@ -611,9 +608,12 @@ func verifyJunxFile(path string, payload *junxPayload) error {
 	if err != nil {
 		return fmt.Errorf("校验失败：无法回读: %w", err)
 	}
-	manifest, body, err := openJunxData(data)
+	manifest, body, mark, err := openJunxData(data)
 	if err != nil {
 		return fmt.Errorf("校验失败：%w", err)
+	}
+	if mark != markForKind(manifest.Kind) {
+		return fmt.Errorf("校验失败：容器类型标记不一致")
 	}
 	if manifest.Kind != payload.manifest.Kind || manifest.Name != payload.manifest.Name {
 		return fmt.Errorf("校验失败：容器信息与源不一致")

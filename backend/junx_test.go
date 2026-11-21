@@ -18,7 +18,7 @@ func sealForTest(t *testing.T, src, kind string) []byte {
 	if err != nil {
 		t.Fatalf("packJunxPayload: %v", err)
 	}
-	sealed, err := sealJunxData(plain)
+	sealed, err := sealJunxData(plain, markForKind(payload.manifest.Kind))
 	if err != nil {
 		t.Fatalf("sealJunxData: %v", err)
 	}
@@ -28,7 +28,7 @@ func sealForTest(t *testing.T, src, kind string) []byte {
 // unpackFromBytes 解密容器并解包到 destDir。
 func unpackFromBytes(t *testing.T, data []byte, destDir string) (string, error) {
 	t.Helper()
-	manifest, body, err := openJunxData(data)
+	manifest, body, _, err := openJunxData(data)
 	if err != nil {
 		return "", err
 	}
@@ -152,17 +152,17 @@ func TestJunxTamperRejected(t *testing.T) {
 
 	tampered := append([]byte(nil), sealed...)
 	tampered[len(tampered)-1] ^= 0xFF
-	if _, _, err := openJunxData(tampered); err == nil {
+	if _, _, _, err := openJunxData(tampered); err == nil {
 		t.Fatalf("篡改后的容器应解密失败")
 	}
 
 	badMagic := append([]byte(nil), sealed...)
 	copy(badMagic[:8], "XXXXXXXX")
-	if _, _, err := openJunxData(badMagic); err == nil {
+	if _, _, _, err := openJunxData(badMagic); err == nil {
 		t.Fatalf("错误的文件头应被拒绝")
 	}
 
-	if _, _, err := openJunxData(sealed[:10]); err == nil {
+	if _, _, _, err := openJunxData(sealed[:10]); err == nil {
 		t.Fatalf("过短的输入应被拒绝")
 	}
 }
@@ -275,7 +275,7 @@ func TestServiceJunxFileFlow(t *testing.T) {
 		t.Fatalf("未勾选删除时原文件应保留: %v", err)
 	}
 
-	if err := service.DecryptFileFromJunx(junx); err != nil {
+	if err := service.DecryptJunx(junx); err != nil {
 		t.Fatalf("解密失败: %v", err)
 	}
 	restored := filepath.Join(dir, "note (2).txt")
@@ -291,7 +291,7 @@ func TestServiceJunxFileFlow(t *testing.T) {
 	}
 }
 
-func TestServiceJunxKindMismatch(t *testing.T) {
+func TestServiceJunxGenericDecrypt(t *testing.T) {
 	service := newTestService(t)
 	root := filepath.Join(t.TempDir(), "资料")
 	mustMkdir(t, root)
@@ -301,12 +301,9 @@ func TestServiceJunxKindMismatch(t *testing.T) {
 	}
 
 	junx := filepath.Join(filepath.Dir(root), "归档.junx")
-	err := service.DecryptFileFromJunx(junx)
-	if err == nil || !strings.Contains(err.Error(), "文件夹加密") {
-		t.Fatalf("类型不匹配应提示到文件夹加密页，实际: %v", err)
-	}
-	if err := service.DecryptFolderFromJunx(junx); err != nil {
-		t.Fatalf("文件夹解密失败: %v", err)
+	// 通用解密：不需要知道容器里是文件还是文件夹。
+	if err := service.DecryptJunx(junx); err != nil {
+		t.Fatalf("通用解密失败: %v", err)
 	}
 	// 容器名只影响容器本身，解密恢复的是清单里的原名；原目录仍在，故加 (2)。
 	if _, err := os.Stat(filepath.Join(filepath.Dir(root), "资料 (2)")); err != nil {
@@ -324,5 +321,89 @@ func TestServiceJunxOutputExistsRejected(t *testing.T) {
 	}
 	if err := service.EncryptFileToJunx(src, "", false, "zh-CN"); err == nil {
 		t.Fatalf("目标已存在时应拒绝覆盖")
+	}
+}
+
+func TestProbePaths(t *testing.T) {
+	service := newTestService(t)
+	dir := t.TempDir()
+
+	file := filepath.Join(dir, "a.txt")
+	mustWrite(t, file, "A")
+	folder := filepath.Join(dir, "资料")
+	mustMkdir(t, folder)
+
+	junxSrc := filepath.Join(dir, "b.txt")
+	mustWrite(t, junxSrc, "B")
+	if err := service.EncryptFileToJunx(junxSrc, "", false, "zh-CN"); err != nil {
+		t.Fatalf("准备容器失败: %v", err)
+	}
+	junx := filepath.Join(dir, "b.txt.junx")
+
+	missing := filepath.Join(dir, "missing.txt")
+	probes := service.ProbePaths([]string{file, folder, junx, missing})
+	if len(probes) != 4 {
+		t.Fatalf("探测数量不对: %d", len(probes))
+	}
+	if probes[0].Kind != "file" || probes[0].OutputPath != file+junxExt || probes[0].OutputExists {
+		t.Fatalf("普通文件探测错误: %+v", probes[0])
+	}
+	if probes[1].Kind != "folder" || probes[1].OutputPath != folder+junxExt {
+		t.Fatalf("文件夹探测错误: %+v", probes[1])
+	}
+	if probes[2].Kind != "junx" || probes[2].ContainerKind != "file" {
+		t.Fatalf("容器探测错误: %+v", probes[2])
+	}
+	if probes[3].Exists || probes[3].Kind != "missing" {
+		t.Fatalf("不存在的路径探测错误: %+v", probes[3])
+	}
+
+	// 目标已存在时应标记 OutputExists，供前端做同名拦截。
+	mustWrite(t, file+junxExt, "occupied")
+	again := service.ProbePaths([]string{file})
+	if !again[0].OutputExists {
+		t.Fatalf("同名产物未被识别: %+v", again[0])
+	}
+}
+
+func TestJunxKindMark(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "a.txt")
+	mustWrite(t, file, "A")
+	if data := sealForTest(t, file, junxFileKind); data[8] != junxMarkFile {
+		t.Fatalf("文件容器标记错误: %#x", data[8])
+	}
+
+	root := filepath.Join(dir, "资料")
+	mustMkdir(t, root)
+	mustWrite(t, filepath.Join(root, "b.txt"), "B")
+	if data := sealForTest(t, root, junxFolderKind); data[8] != junxMarkFolder {
+		t.Fatalf("文件夹容器标记错误: %#x", data[8])
+	}
+
+	// 标记被篡改时仍以加密清单为准。
+	payload, err := buildJunxPayload(root, junxFolderKind, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := packJunxPayload(payload.manifest, payload.body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mismatched, err := sealJunxData(plain, junxMarkFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	junxPath := filepath.Join(dir, "mismatch.junx")
+	if err := os.WriteFile(junxPath, mismatched, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	service := newTestService(t)
+	if err := service.DecryptJunx(junxPath); err != nil {
+		t.Fatalf("标记不一致时仍应按清单还原: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "资料 (2)")); err != nil {
+		t.Fatalf("未按清单重建目录: %v", err)
 	}
 }

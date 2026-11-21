@@ -143,6 +143,11 @@ pinTopBtn.addEventListener("click", () => {
 
 // 一级标签切换：面板互斥显示，常规/关于页隐藏日志区腾出空间。
 function switchTab(tabId) {
+    // 批量运行期间锁定在当前页面，避免队列跑在后台却看不到进度。
+    if (batch.running) {
+        const runningTab = batch.page === "file" ? "tabFileEnc" : "tabFolderEnc";
+        if (tabId !== runningTab) return;
+    }
     document.querySelectorAll(".tab").forEach((item) => {
         item.classList.toggle("active", item.dataset.tab === tabId);
     });
@@ -152,6 +157,12 @@ function switchTab(tabId) {
     currentTab = tabId;
     refreshHint();
     logGroup.classList.toggle("hidden", tabId === "tabAbout" || tabId === "tabGeneral");
+
+    // 离开批量任务所属页面时收起面板，避免跨页操作队列。
+    if (batch.open) {
+        const expected = batch.page === "file" ? "tabFileEnc" : "tabFolderEnc";
+        if (tabId !== expected) closeBatch();
+    }
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -240,6 +251,7 @@ const encPages = {
         start: el("fileEncStart"),
         decrypt: el("fileEncDecrypt"),
         pick: el("fileEncPick"),
+        batch: el("fileEncBatch"),
         needMsg: "msg.needSource",
     },
     folder: {
@@ -252,9 +264,479 @@ const encPages = {
         start: el("folderEncStart"),
         decrypt: el("folderEncDecrypt"),
         pick: el("folderEncPick"),
+        batch: el("folderEncBatch"),
         needMsg: "msg.needSourceFolder",
     },
 };
+
+// ================= 批量任务 =================
+// 队列只在前端维护：单线程串行调用现有单任务接口，暂停/删除仅作用于排队中的任务。
+const BATCH_SETTINGS_KEY = "folder-hide-batch-settings";
+const BATCH_SIZE = { width: 576, height: 470 };
+const SINGLE_SIZE = { width: 414, height: 400 };
+
+const batchPanel = el("batchPanel");
+const batchTasksBox = el("batchTasks");
+const batchEmpty = el("batchEmpty");
+const batchModeLabel = el("batchMode");
+const batchGridBtn = el("batchGridBtn");
+const batchListBtn = el("batchListBtn");
+const batchFileChk = el("batchFileChk");
+const batchFolderChk = el("batchFolderChk");
+
+const batch = {
+    open: false,
+    page: "file",       // 面板当前所属页面
+    view: "grid",       // grid | list
+    mode: "",           // "" | encrypt | decrypt，由第一个任务决定
+    lists: { file: [], folder: [] },
+    running: false,
+    total: 0,           // 启动时冻结，暂停/删除时递减
+    done: 0,
+    currentId: "",
+};
+
+function batchList() {
+    return batch.lists[batch.page];
+}
+
+function readBatchSettings() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(BATCH_SETTINGS_KEY) || "{}");
+        return { file: !!saved.file, folder: !!saved.folder };
+    } catch (_) {
+        return { file: false, folder: false };
+    }
+}
+
+function saveBatchSettings(settings) {
+    try {
+        localStorage.setItem(BATCH_SETTINGS_KEY, JSON.stringify(settings));
+    } catch (_) {
+        // 持久化失败只影响下次启动的默认状态。
+    }
+}
+
+function baseName(path) {
+    const clean = String(path).replace(/[\\/]+$/, "");
+    const index = Math.max(clean.lastIndexOf("\\"), clean.lastIndexOf("/"));
+    return index >= 0 ? clean.slice(index + 1) : clean;
+}
+
+function sameSource(a, b) {
+    return a.replace(/[\\/]+$/, "").toLowerCase() === b.replace(/[\\/]+$/, "").toLowerCase();
+}
+
+function isSubPath(parent, child) {
+    const p = String(parent).replace(/[\\/]+$/, "").toLowerCase();
+    const c = String(child).replace(/[\\/]+$/, "").toLowerCase();
+    return c.startsWith(p + "\\") || c.startsWith(p + "/");
+}
+
+function taskTitle(task) {
+    const percent = task.state === "running" ? " · " + task.percent + "%" : "";
+    return task.name + percent + (task.error ? " · " + task.error : "");
+}
+
+// 第一个任务决定批量性质；之后类型不符直接拒绝。
+async function checkBatchPath(probe, list) {
+    if (!probe.Exists) {
+        return { ok: false, reason: t("batch.errMissing", { name: baseName(probe.Path) }) };
+    }
+    if (probe.Kind === "other") {
+        return { ok: false, reason: t("batch.errOther", { name: baseName(probe.Path) }) };
+    }
+
+    const isJunx = probe.Kind === "junx";
+    if (!isJunx && batch.page === "file" && probe.Kind !== "file") {
+        return { ok: false, reason: t("batch.errNeedFile", { name: baseName(probe.Path) }) };
+    }
+    if (!isJunx && batch.page === "folder" && probe.Kind !== "folder") {
+        return { ok: false, reason: t("batch.errNeedFolder", { name: baseName(probe.Path) }) };
+    }
+
+    const mode = isJunx ? "decrypt" : "encrypt";
+    if (batch.mode && batch.mode !== mode) {
+        return {
+            ok: false,
+            reason: t(batch.mode === "encrypt" ? "batch.errModeEncrypt" : "batch.errModeDecrypt", {
+                name: baseName(probe.Path),
+            }),
+        };
+    }
+
+    if (list.some((task) => sameSource(task.source, probe.Path))) {
+        return { ok: false, reason: t("batch.errDuplicate", { name: baseName(probe.Path) }) };
+    }
+
+    if (mode === "encrypt" && probe.OutputExists) {
+        return { ok: false, reason: t("batch.errOutputExists", { name: probe.OutputPath }) };
+    }
+
+    if (mode === "encrypt" && batch.page === "folder") {
+        if (list.some((task) => isSubPath(task.source, probe.Path))) {
+            return { ok: false, reason: t("batch.errNested", { name: baseName(probe.Path) }) };
+        }
+        const parents = list.filter((task) => isSubPath(probe.Path, task.source));
+        if (parents.length) {
+            const merge = await askMerge(probe.Path, parents.length);
+            if (!merge) {
+                return { ok: false, reason: t("batch.errMergeCanceled", { name: baseName(probe.Path) }) };
+            }
+            parents.forEach((task) => removeTaskSilently(task.id));
+        }
+    }
+    return { ok: true, mode };
+}
+
+async function askMerge(path, count) {
+    try {
+        const yes = t("btn.merge");
+        const answer = await Dialogs.Question({
+            Title: t("batch.mergeTitle"),
+            Message: t("batch.mergeMessage", { name: baseName(path), count }),
+            Buttons: [
+                { Label: yes, IsDefault: true },
+                { Label: t("btn.cancel"), IsCancel: true },
+            ],
+        });
+        return answer === yes;
+    } catch (_) {
+        return false;
+    }
+}
+
+async function addBatchPaths(paths) {
+    if (batch.running) {
+        showError(t("batch.errRunning"));
+        return;
+    }
+    let probes = [];
+    try {
+        probes = await FolderService.ProbePaths(paths);
+    } catch (err) {
+        showError(err);
+        return;
+    }
+
+    const list = batchList();
+    for (const probe of probes) {
+        const verdict = await checkBatchPath(probe, list);
+        if (!verdict.ok) {
+            appendLog("[WARN] " + verdict.reason);
+            continue;
+        }
+        list.push({
+            id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            source: probe.Path,
+            name: baseName(probe.Path),
+            state: "pending",
+            percent: 0,
+            phase: "",
+            error: "",
+        });
+        if (!batch.mode) batch.mode = verdict.mode;
+    }
+    renderBatch();
+}
+
+function buildTaskButtons(task) {
+    const box = document.createElement("span");
+    box.className = "task-buttons";
+
+    const pause = document.createElement("button");
+    pause.type = "button";
+    pause.className = "task-pause" + (task.state === "paused" ? " resume" : "");
+    pause.title = t(task.state === "paused" ? "batch.resume" : "batch.pause");
+    pause.addEventListener("click", (event) => {
+        event.stopPropagation();
+        togglePause(task);
+    });
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "task-del";
+    del.textContent = "×";
+    del.title = t("batch.remove");
+    del.addEventListener("click", (event) => {
+        event.stopPropagation();
+        removeTask(task.id);
+    });
+
+    box.append(pause, del);
+    return box;
+}
+
+function renderTile(task) {
+    const tile = document.createElement("div");
+    tile.className = "task-tile " + task.state;
+    tile.dataset.id = task.id;
+    tile.title = taskTitle(task);
+
+    const fill = document.createElement("div");
+    fill.className = "task-fill";
+    fill.style.height = task.percent + "%";
+    tile.appendChild(fill);
+
+    if (task.state !== "running") {
+        const hover = document.createElement("div");
+        hover.className = "task-hover";
+        hover.appendChild(buildTaskButtons(task));
+        tile.appendChild(hover);
+    }
+    return tile;
+}
+
+function renderRow(task) {
+    const row = document.createElement("div");
+    row.className = "task-row " + task.state;
+    row.dataset.id = task.id;
+    row.title = taskTitle(task);
+
+    const name = document.createElement("span");
+    name.className = "task-name";
+    name.textContent = task.name;
+    row.appendChild(name);
+
+    const bar = document.createElement("span");
+    bar.className = "task-bar";
+    const fill = document.createElement("span");
+    fill.className = "task-bar-fill";
+    fill.style.width = task.percent + "%";
+    bar.appendChild(fill);
+    row.appendChild(bar);
+
+    if (task.state !== "running") {
+        const actions = buildTaskButtons(task);
+        actions.classList.add("task-actions");
+        row.appendChild(actions);
+    }
+    return row;
+}
+
+function renderBatch() {
+    const list = batchList();
+    batchTasksBox.className = "batch-tasks " + batch.view;
+    batchTasksBox.replaceChildren();
+    list.forEach((task) => {
+        batchTasksBox.appendChild(batch.view === "grid" ? renderTile(task) : renderRow(task));
+    });
+    batchEmpty.classList.toggle("hidden", list.length > 0);
+
+    if (!list.length) {
+        batchModeLabel.textContent = t("batch.modeEmpty");
+    } else {
+        batchModeLabel.textContent = t(batch.mode === "decrypt" ? "batch.modeDecrypt" : "batch.modeEncrypt", {
+            count: list.length,
+        });
+    }
+    syncBatchControls();
+}
+
+function syncBatchControls() {
+    batchGridBtn.classList.toggle("active", batch.view === "grid");
+    batchListBtn.classList.toggle("active", batch.view === "list");
+    if (!batch.open) return;
+
+    const page = encPages[batch.page];
+    const list = batchList();
+    if (batch.running) return;
+    // 批量性质确定后，另一个操作按钮不可用。
+    page.start.disabled = list.length > 0 && batch.mode === "decrypt";
+    page.decrypt.disabled = list.length > 0 && batch.mode === "encrypt";
+}
+
+function updateTaskVisual(task) {
+    const node = batchTasksBox.querySelector('[data-id="' + task.id + '"]');
+    if (!node) return;
+    const fill = node.querySelector(".task-fill, .task-bar-fill");
+    if (fill) {
+        if (batch.view === "grid") {
+            fill.style.height = task.percent + "%";
+        } else {
+            fill.style.width = task.percent + "%";
+        }
+    }
+    node.title = taskTitle(task);
+}
+
+function togglePause(task) {
+    if (task.state === "running") return;
+    if (task.state === "paused") {
+        task.state = "pending";
+        if (batch.running) batch.total += 1;
+    } else {
+        task.state = "paused";
+        if (batch.running) batch.total -= 1;
+    }
+    renderBatch();
+    refreshBatchProgress();
+}
+
+function removeTask(id) {
+    const list = batchList();
+    const index = list.findIndex((task) => task.id === id);
+    if (index < 0) return;
+    const [task] = list.splice(index, 1);
+    if (batch.running && task.state === "pending") batch.total -= 1;
+    if (!list.length) batch.mode = "";
+    renderBatch();
+    refreshBatchProgress();
+}
+
+function removeTaskSilently(id) {
+    const list = batchList();
+    const index = list.findIndex((task) => task.id === id);
+    if (index >= 0) list.splice(index, 1);
+}
+
+// 总进度：完成数 + 当前任务进度，分母是启动时冻结的总数（暂停/删除会从分母扣除）。
+function refreshBatchProgress() {
+    if (!batch.running) return;
+    const page = encPages[batch.page];
+    const current = batchList().find((task) => task.id === batch.currentId);
+    const percent = current ? current.percent : 0;
+    const value = batch.total > 0 ? Math.min(100, Math.round(((batch.done + percent / 100) / batch.total) * 100)) : 100;
+    page.fill.style.width = value + "%";
+    page.text.textContent = value + "% · " + batch.done + "/" + batch.total;
+}
+
+async function runBatch(kind) {
+    if (batch.running) return;
+    const page = encPages[batch.page];
+    const list = batchList();
+    if (!list.length) {
+        showError(t("batch.errEmpty"));
+        return;
+    }
+    if (batch.mode && batch.mode !== kind) {
+        showError(t(batch.mode === "encrypt" ? "batch.errRunEncrypt" : "batch.errRunDecrypt"));
+        return;
+    }
+
+    batch.running = true;
+    batch.done = 0;
+    // 只统计本次真正会执行的排队任务：暂停与上一轮失败的任务都不计入。
+    batch.total = list.filter((task) => task.state === "pending").length;
+    batch.currentId = "";
+    if (batch.total === 0) {
+        batch.running = false;
+        showError(t("batch.errNoPending"));
+        return;
+    }
+
+    setBusy(page, true);
+    page.batch.disabled = true;
+    page.fill.style.width = "0%";
+    page.text.textContent = "0% · 0/" + batch.total;
+
+    try {
+        while (true) {
+            const task = batchList().find((item) => item.state === "pending");
+            if (!task) break;
+            task.state = "running";
+            task.percent = 0;
+            batch.currentId = task.id;
+            renderBatch();
+            try {
+                if (kind === "encrypt") {
+                    if (batch.page === "file") {
+                        await FolderService.EncryptFileToJunx(task.source, "", false, getLocale());
+                    } else {
+                        await FolderService.EncryptFolderToJunx(task.source, "", false, getLocale());
+                    }
+                } else {
+                    // 通用解密：容器里是文件还是文件夹由清单决定。
+                    await FolderService.DecryptJunx(task.source);
+                }
+                removeTaskSilently(task.id);
+                batch.done += 1;
+            } catch (err) {
+                task.state = "error";
+                task.percent = 100;
+                task.error = err && err.message ? err.message : String(err);
+                batch.done += 1;
+                appendLog("[ERROR] " + task.error);
+            }
+            batch.currentId = "";
+            if (!batchList().length) batch.mode = "";
+            renderBatch();
+            refreshBatchProgress();
+        }
+    } finally {
+        batch.running = false;
+        batch.currentId = "";
+        setBusy(page, false);
+        applyBatchUI();
+        page.batch.disabled = false;
+        renderBatch();
+        const value = batch.total > 0 ? 100 : 0;
+        page.fill.style.width = value + "%";
+        page.text.textContent = value + "% · " + batch.done + "/" + batch.total;
+    }
+}
+
+// 批量态：源输入框变成三倍高的拖入区，浏览/输出名称/删除原件全部禁用。
+function applyBatchUI() {
+    const open = batch.open;
+    batchPanel.classList.toggle("hidden", !open);
+    document.body.classList.toggle("batch-mode", open);
+
+    Object.entries(encPages).forEach(([kind, page]) => {
+        const active = open && kind === batch.page;
+        page.src.classList.toggle("batch-drop", active);
+        page.src.readOnly = active;
+        page.out.disabled = active;
+        page.del.disabled = active;
+        page.pick.disabled = active;
+        page.batch.classList.toggle("active", open && kind === batch.page);
+        if (active) {
+            page.src.placeholder = t("placeholder.batchDrop");
+        } else {
+            page.src.placeholder = t(kind === "file" ? "placeholder.filePath" : "placeholder.folderPath");
+        }
+    });
+}
+
+async function setWindowSize(size) {
+    try {
+        await Window.SetSize(size.width, size.height);
+    } catch (_) {
+        // 窗口尺寸调整失败不影响功能。
+    }
+}
+
+async function openBatch(kind) {
+    if (batch.open && batch.page === kind) return;
+    if (batch.running) return;
+    if (activeProgress) {
+        showError(t("msg.busy"));
+        return;
+    }
+    batch.open = true;
+    batch.page = kind;
+    switchTab(kind === "file" ? "tabFileEnc" : "tabFolderEnc");
+    applyBatchUI();
+    renderBatch();
+    resetProgress(encPages[kind]);
+    await setWindowSize(BATCH_SIZE);
+}
+
+async function closeBatch() {
+    if (!batch.open || batch.running) return;
+    batch.open = false;
+    applyBatchUI();
+    renderBatch();
+    await setWindowSize(SINGLE_SIZE);
+}
+
+function syncBatchSettings() {
+    const settings = { file: batchFileChk.checked, folder: batchFolderChk.checked };
+    saveBatchSettings(settings);
+    encPages.file.batch.classList.toggle("hidden", !settings.file);
+    encPages.folder.batch.classList.toggle("hidden", !settings.folder);
+    if (batch.open && !settings[batch.page]) closeBatch();
+}
 
 // 同一时间只允许一个加解密任务，进度事件据此决定更新哪一页。
 let activeProgress = null;
@@ -360,11 +842,8 @@ async function runDecrypt(page) {
     resetProgress(page);
     setBusy(page, true);
     try {
-        if (page.kind === "file") {
-            await FolderService.DecryptFileFromJunx(junxPath);
-        } else {
-            await FolderService.DecryptFolderFromJunx(junxPath);
-        }
+        // 通用解密：两个页面都能解任何容器，类型由清单决定。
+        await FolderService.DecryptJunx(junxPath);
     } catch (err) {
         showError(err);
     } finally {
@@ -386,8 +865,27 @@ Object.values(encPages).forEach((page) => {
             showError(err);
         }
     });
-    page.start.addEventListener("click", () => runEncrypt(page));
-    page.decrypt.addEventListener("click", () => runDecrypt(page));
+    page.start.addEventListener("click", () => {
+        if (batch.open) {
+            runBatch("encrypt");
+            return;
+        }
+        runEncrypt(page);
+    });
+    page.decrypt.addEventListener("click", () => {
+        if (batch.open) {
+            runBatch("decrypt");
+            return;
+        }
+        runDecrypt(page);
+    });
+    page.batch.addEventListener("click", () => {
+        if (batch.open && batch.page === page.kind) {
+            closeBatch();
+        } else {
+            openBatch(page.kind);
+        }
+    });
 });
 
 function applyStartupState(state) {
@@ -737,8 +1235,12 @@ onLocaleChange(() => {
     createPinBoxes(setupPinBoxes, PIN_LENGTH, focusConfirmFirst);
     createPinBoxes(confirmPinBoxes, PIN_LENGTH);
     syncPinSetupEditable();
-    if (!activeProgress) {
+    if (!activeProgress && !batch.running) {
         Object.values(encPages).forEach(resetProgress);
+    }
+    if (batch.open) {
+        applyBatchUI();
+        renderBatch();
     }
 });
 
@@ -755,36 +1257,74 @@ Events.On(FolderLog, (event) => appendLog(event.data));
 
 // 后端推送的进度事件：Percent 0-100，Phase 为 scan/build/encrypt/...
 Events.On(FolderProgress, (event) => {
-    if (!activeProgress) return;
     const data = event.data || {};
     const percent = Number(data.Percent ?? data.percent ?? 0);
     const phase = data.Phase || data.phase || "";
+
+    // 批量运行中：事件属于当前子任务，同时刷新子任务与总进度。
+    if (batch.running && batch.currentId) {
+        const task = batchList().find((item) => item.id === batch.currentId);
+        if (task) {
+            task.percent = Math.max(0, Math.min(100, Math.round(percent)));
+            task.phase = phase;
+            updateTaskVisual(task);
+        }
+        refreshBatchProgress();
+        return;
+    }
+
+    if (!activeProgress) return;
     updateProgress(activeProgress, percent, phase);
 });
 
-// 拖放文件到窗口：按落点元素（data-file-drop-target）决定填哪个输入框。
-Events.On(FilesDropped, (event) => {
+// 拖放文件到窗口：按落点元素决定填哪个输入框；批量面板展开时全部转成任务。
+Events.On(FilesDropped, async (event) => {
     const data = event.data || {};
     const paths = data.Paths || data.paths || [];
     if (!Array.isArray(paths) || paths.length === 0) return;
     const target = data.Target || data.target || "";
 
     let page = null;
-    if (target === "file") {
+    if (target === "fileEncDrop") {
         page = encPages.file;
-    } else if (target === "folder") {
+    } else if (target === "folderEncDrop") {
         page = encPages.folder;
     } else if (currentTab === "tabFileEnc") {
         page = encPages.file;
     } else if (currentTab === "tabFolderEnc") {
         page = encPages.folder;
     }
-    if (!page || activeProgress) return;
+    if (!page) return;
+
+    if (batch.open) {
+        // 批量面板展开时只接受当前页面的拖入，避免把任务加进看不见的页面。
+        if (page.kind === batch.page) await addBatchPaths(paths);
+        return;
+    }
+    if (activeProgress) return;
 
     page.src.value = paths[0];
     // 拖入新的文件/文件夹后，进度条复位成初始的“就绪”状态
     resetProgress(page);
     switchTab(page.kind === "file" ? "tabFileEnc" : "tabFolderEnc");
+});
+
+// 批量设置：两个开关持久化到 localStorage，控制对应页「批量」按钮的显隐。
+const initialBatchSettings = readBatchSettings();
+batchFileChk.checked = initialBatchSettings.file;
+batchFolderChk.checked = initialBatchSettings.folder;
+encPages.file.batch.classList.toggle("hidden", !initialBatchSettings.file);
+encPages.folder.batch.classList.toggle("hidden", !initialBatchSettings.folder);
+batchFileChk.addEventListener("change", syncBatchSettings);
+batchFolderChk.addEventListener("change", syncBatchSettings);
+
+batchGridBtn.addEventListener("click", () => {
+    batch.view = "grid";
+    renderBatch();
+});
+batchListBtn.addEventListener("click", () => {
+    batch.view = "list";
+    renderBatch();
 });
 
 async function init() {

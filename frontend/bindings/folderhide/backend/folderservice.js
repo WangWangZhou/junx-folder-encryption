@@ -37,15 +37,6 @@ export function ConfigurePin(pin, length, policy) {
 }
 
 /**
- * DecryptFileFromJunx 解密文件容器，输出到 .junx 所在目录，重名自动追加序号。
- * @param {string} junxPath
- * @returns {$CancellablePromise<void>}
- */
-export function DecryptFileFromJunx(junxPath) {
-    return $Call.ByID(1116710833, junxPath);
-}
-
-/**
  * DecryptFolder 将隐藏后的文件夹恢复为资源管理器可访问的原名。
  * @param {string} path
  * @returns {$CancellablePromise<void>}
@@ -64,12 +55,13 @@ export function DecryptFolderByACL(path) {
 }
 
 /**
- * DecryptFolderFromJunx 解密文件夹容器，重建目录树。
+ * DecryptJunx 通用解密：读取容器清单后自动决定还原单个文件还是整个目录树。
+ * 两个加密页与批量解密都调用它，用户无需事先知道容器里装的是什么。
  * @param {string} junxPath
  * @returns {$CancellablePromise<void>}
  */
-export function DecryptFolderFromJunx(junxPath) {
-    return $Call.ByID(1631201523, junxPath);
+export function DecryptJunx(junxPath) {
+    return $Call.ByID(169393303, junxPath);
 }
 
 /**
@@ -160,12 +152,24 @@ export function Lock() {
 }
 
 /**
+ * ProbePaths 批量探测拖入的路径，不修改任何文件。
+ * 与加密/解密接口不同，这里允许在未解锁状态下调用：它只读取名称与文件头。
+ * @param {string[]} paths
+ * @returns {$CancellablePromise<$models.PathProbe[]>}
+ */
+export function ProbePaths(paths) {
+    return $Call.ByID(3161538085, paths).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
  * RecentLogs 返回最近的日志。
  * @returns {$CancellablePromise<string[]>}
  */
 export function RecentLogs() {
     return $Call.ByID(1632993871).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType5($result);
     }));
 }
 
@@ -224,4 +228,6 @@ export function Version() {
 const $$createType0 = $models.PinResult.createFrom;
 const $$createType1 = $models.PinState.createFrom;
 const $$createType2 = $models.StartupState.createFrom;
-const $$createType3 = $Create.Array($Create.Any);
+const $$createType3 = $models.PathProbe.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = $Create.Array($Create.Any);

@@ -10,6 +10,7 @@ export {
 export {
     DropFiles,
     JunxProgress,
+    PathProbe,
     PinResult,
     PinState,
     StartupState

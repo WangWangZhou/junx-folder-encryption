@@ -8,6 +8,28 @@
 </head>
 <body>
 <div class="app">
+    <aside class="batch-panel hidden" id="batchPanel">
+        <div class="batch-head">
+            <span class="batch-title" data-i18n="batch.title">批量任务</span>
+            <span class="batch-views">
+                <button id="batchGridBtn" class="view-btn active" type="button" data-i18n-title="batch.grid">
+                    <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                        <path d="M1 1h4v4H1zM7 1h4v4H7zM1 7h4v4H1zM7 7h4v4H7z" fill="currentColor"/>
+                    </svg>
+                </button>
+                <button id="batchListBtn" class="view-btn" type="button" data-i18n-title="batch.list">
+                    <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                        <path d="M1 2h10v1.7H1zM1 5.2h10v1.7H1zM1 8.4h10V10H1z" fill="currentColor"/>
+                    </svg>
+                </button>
+            </span>
+        </div>
+        <div class="batch-mode" id="batchMode"></div>
+        <div class="batch-tasks grid" id="batchTasks"></div>
+        <div class="batch-empty" id="batchEmpty" data-i18n="batch.empty">把文件拖到右侧区域添加任务</div>
+    </aside>
+
+    <div class="app-main">
     <div class="tabs" role="tablist">
         <button class="tab active" data-tab="tabHide" data-i18n="tab.hide" type="button">文件夹隐藏</button>
         <button class="tab" data-tab="tabFileEnc" data-i18n="tab.fileEnc" type="button">文件加密</button>
@@ -85,6 +107,7 @@
                 <span class="progress-text" id="fileEncText" data-i18n="progress.idle">就绪</span>
             </div>
             <div class="actions">
+                <button id="fileEncBatch" class="btn batch-toggle hidden" data-i18n="btn.batch" type="button">批量</button>
                 <button id="fileEncStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
                 <button id="fileEncDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
             </div>
@@ -114,14 +137,16 @@
                 <span class="progress-text" id="folderEncText" data-i18n="progress.idle">就绪</span>
             </div>
             <div class="actions">
+                <button id="folderEncBatch" class="btn batch-toggle hidden" data-i18n="btn.batch" type="button">批量</button>
                 <button id="folderEncStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
                 <button id="folderEncDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
             </div>
         </section>
 
         <section class="panel" id="tabGeneral">
-            <fieldset class="group">
+            <fieldset class="group general-group">
                 <legend data-i18n="group.general">常规设置</legend>
+                <button id="clearLogBtn" class="btn small group-corner" data-i18n="btn.clearLog" type="button">清空日志</button>
                 <div class="field-row">
                     <label for="langSelect" data-i18n="field.language">显示语言:</label>
                     <select id="langSelect" class="lang-select">
@@ -169,9 +194,21 @@
                     <button id="manualLockBtn" class="btn small" data-i18n="btn.manualLock" type="button">手动锁定</button>
                 </div>
             </fieldset>
-            <div class="actions">
-                <button id="clearLogBtn" class="btn" data-i18n="btn.clearLog" type="button">清空日志</button>
-            </div>
+            <fieldset class="group">
+                <legend data-i18n="group.batch">批量设置</legend>
+                <div class="field-row checkbox-row batch-setting-row">
+                    <label class="checkbox-label">
+                        <input id="batchFileChk" type="checkbox"/>
+                        <span data-i18n="chk.batchFile">打开文件加密批量任务支持</span>
+                    </label>
+                </div>
+                <div class="field-row checkbox-row batch-setting-row">
+                    <label class="checkbox-label">
+                        <input id="batchFolderChk" type="checkbox"/>
+                        <span data-i18n="chk.batchFolder">打开文件夹加密批量任务支持</span>
+                    </label>
+                </div>
+            </fieldset>
         </section>
 
         <section class="panel about" id="tabAbout">
@@ -193,6 +230,7 @@
 
     <div class="bottom">
         <span class="hint" id="hint">文件夹隐藏：只改目录名与权限，不加密内容。</span>
+    </div>
     </div>
 </div>
 
