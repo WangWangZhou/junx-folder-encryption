@@ -1,4 +1,4 @@
-Unicode true
+﻿Unicode true
 
 ####
 ## Please note: Template replacements don't work in this file. They are provided with default defines like
@@ -61,11 +61,20 @@ ManifestDPIAware true
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
 !insertmacro MUI_PAGE_DIRECTORY # In which folder install page.
 !insertmacro MUI_PAGE_INSTFILES # Installing page.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}" # Show "Run app" checkbox on finish page.
+!define MUI_FINISHPAGE_RUN_TEXT "$(RunAppNow)"
 !insertmacro MUI_PAGE_FINISH # Finished installation page.
 
 !insertmacro MUI_UNPAGE_INSTFILES # Uninstalling page
 
-!insertmacro MUI_LANGUAGE "English" # Set the Language of the installer
+# The first language is the default when the system language does not match.
+!insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "Japanese"
+
+LangString RunAppNow ${LANG_SIMPCHINESE} "立即运行 folder-encryption"
+LangString RunAppNow ${LANG_ENGLISH}    "Run folder-encryption now"
+LangString RunAppNow ${LANG_JAPANESE}   "folder-encryption を今すぐ起動"
 
 ## The following two statements can be used to sign the installer and the uninstaller. The path to the binaries are provided in %1
 #!uninstfinalize 'signtool --file "%1"'
@@ -82,6 +91,7 @@ ShowInstDetails show # This will always show the installation details.
 
 Function .onInit
    !insertmacro wails.checkArchitecture
+   !insertmacro MUI_LANGDLL_DISPLAY
 FunctionEnd
 
 Section

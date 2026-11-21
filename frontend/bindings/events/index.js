@@ -7,7 +7,17 @@
 import "../github.com/wailsapp/wails/v3/internal/eventcreate.js";
 
 /**
+ * Name of the custom event "files-dropped".
+ */
+export const FilesDropped = "files-dropped";
+
+/**
  * Name of the custom event "folder-log".
  */
 export const FolderLog = "folder-log";
+
+/**
+ * Name of the custom event "folder-progress".
+ */
+export const FolderProgress = "folder-progress";
 

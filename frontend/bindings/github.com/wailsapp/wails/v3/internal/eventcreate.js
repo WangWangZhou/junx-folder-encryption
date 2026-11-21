@@ -6,9 +6,19 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as backend$0 from "../../../../../folderhide/backend/models.js";
+
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
+        "files-dropped": $$createType0,
+        "folder-progress": $$createType1,
     }));
 }
+
+// Private type creation functions
+const $$createType0 = backend$0.DropFiles.createFrom;
+const $$createType1 = backend$0.JunxProgress.createFrom;
 
 configure();

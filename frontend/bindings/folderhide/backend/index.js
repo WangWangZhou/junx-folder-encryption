@@ -8,5 +8,9 @@ export {
 };
 
 export {
+    DropFiles,
+    JunxProgress,
+    PinResult,
+    PinState,
     StartupState
 } from "./models.js";

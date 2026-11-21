@@ -1,59 +1,218 @@
-# Welcome to Your New Wails3 Project!
+# 文件夹隐藏工具（Folder Hide Tool）
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+基于 **Wails 3 + Go** 的 Windows 桌面小工具：既可以用重命名或 ACL 权限限制让文件夹双击无法打开，也可以把单个文件或整个目录树用 **AES-256-GCM** 打包成 `.junx` 容器。界面提供简体中文 / English / 日本語三种语言。
 
-## Getting Started
+> 当前版本：`1.0.0`　|　窗口尺寸：414 × 400　|　平台：Windows 10 / 11（amd64）
 
-1. Navigate to your project directory in the terminal.
+---
 
-2. To run your application in development mode, use the following command:
+## 1. 功能特性
 
-   ```
-   wails3 dev
-   ```
+### 1.1 方案A：尾随点隐藏（Scheme A）
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+- 在目录名末尾追加 `..`，并设置 `FILE_ATTRIBUTE_HIDDEN` 隐藏属性。
+- 普通 Win32 路径会把末尾句点剥掉，解析到一个不存在的名字，因此资源管理器双击会报「位置不可用」。
+- 若填写了「新的文件夹名称」，会**先改名再隐藏**；任一步失败自动回滚。
+- 解密时去掉 `..` 后缀并清除隐藏属性。
+- 核心路径处理走 `\\?\` 扩展路径 + `MoveFileEx`，绕开 Win32 路径规范化（Go 的 `filepath.Clean` 会吃掉末尾句点，不能用于末段）。
 
-3. To build your application for production, use:
+### 1.2 方案D：ACL 拒绝列目录（Scheme D）
 
-   ```
-   wails3 build
-   ```
+- 加密时：备份目录 DACL 为 SDDL → 将原名用 **AES-256-GCM** 加密写入目录内部 `.DS_Store`（带 HIDDEN + SYSTEM 属性）→ 追加仅针对**当前用户 SID** 的 `FILE_LIST_DIRECTORY` 拒绝 ACE → 设置隐藏属性。
+- 双击时因无法列目录（列目录即打开文件夹的前提）而失败，不受 Shell 解析方式影响。
+- 只拒绝 `FILE_LIST_DIRECTORY`（0x1），保留 `FILE_TRAVERSE`，因此工具仍能凭已知路径读取内部 `.DS_Store` 用于恢复。
+- 解密时：**先恢复 DACL**，再清除隐藏属性、删除 `.DS_Store`。顺序不可颠倒——拒绝列目录后无法写入或删除目录内文件。
+- 元数据 magic 为 `FOLDERHIDE-D`，用于防止误读 macOS 真实 `.DS_Store`；已存在的 `.DS_Store` 不会被覆盖。
 
-   This will create a production-ready executable in the `build` directory.
+### 1.3 文件加密 / 文件夹加密（.junx）
 
-## Exploring Wails3 Features
+- **文件加密**：把单个文件打包为 `原名.junx`；**文件夹加密**：把整个目录树（含空目录）打包为一个 `.junx`。
+- 源路径支持三种选择方式：直接输入/粘贴文本框、点「浏览…」调原生选择框、从资源管理器把文件或文件夹拖到窗口中。
+- **输出名称**选填：留空时使用源文件名 / 源文件夹名；不区分大小写地自动补 `.junx` 扩展名，输出到源所在目录。
+- 容器格式（version 1）：
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+  ```
+  偏移  长度  内容
+  0     8     magic "JUNX0001"
+  8     12    GCM nonce
+  20    -     AES-256-GCM 密文（含 16 字节 tag）
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
+  明文 = uint32 清单长度 | 清单 JSON | 各文件内容按 offset 顺次拼接
+  ```
 
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
+- 清单记录 `kind`（file / folder）、原始名称，以及每个条目的相对路径、偏移与长度；**清单本身在密文内**，因此 `strings` 扫不出内部文件名或目录树。
+- 密钥由内置字符串 `folderhide-junx-v1` 经 SHA-256 派生，与方案D 的元数据密钥分开，避免共用密钥流。
+- 加密流程：扫描 → 打包 → 封装 → 写临时文件 → **回读并解密校验** → 改名为正式 `.junx`，任一步失败都会删除临时文件。
+- 勾选「加密后删除原文件 / 原文件夹」时，只有在上述校验通过后才弹原生二次确认框；选「删除」才永久删除（`os.RemoveAll`，不进入回收站），选「保留」则原样留下。
+- 解密固定输出到 `.junx` 所在目录，遇到同名一律自动改名为 `名称 (2)`、`名称 (3)`，文件保留扩展名（`报告 (2).txt`），**绝不覆盖、不报错**。
+- 篡改密文、错误 magic、清单越界路径、文件头不完整都会被拒绝；解密时的相对路径统一做 `..` 越界检查。
+- 符号链接与设备文件不会被打包，日志中以 `[WARN]` 提示跳过数量。
 
-   ```
-   go run .
-   ```
+### 1.4 常规设置（General）
 
-   Note: Some examples may be under development during the alpha phase.
+- **显示语言**：简体中文 / English / 日本語，选择后立即生效并写入 `localStorage`，首次启动按系统语言自动选择。
+- **开机启动**：写入当前用户注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，值名 `FolderHideTool`。
+- **以管理员身份启动**：通过 `HKCU\Software\Microsoft\Windows NT\CurrentVersion\App Compatibility Flags\<exe路径>` 下的 `RUNASADMIN` 标志实现；**仅在勾选「开机启动」后才可勾选**，取消开机启动会同时清除该标志。该标志需重启程序生效，且每次启动会弹出 UAC 确认。
+- **清空日志**：清空界面日志区与后端内存日志。
 
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
+### 1.5 打开密码（Opening Password）
 
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
+- 默认关闭，在「常规」面板勾选「打开密码」后，下方显示两行各 4 个 PIN 输入框：第一行输入新密码，第二行再输入一次确认，两次一致后点击「保存」才生效。
+- 密码固定为 4 位纯数字，尝试次数不限；界面不再提供位数与策略选择，且输入默认不可见（掩码显示）。
+- 保存成功后自动弹出解锁页，输入刚设置的密码确认并解锁；支持自动跳格、退格和粘贴。
+- 密码已启用时设置区 8 个输入框只读；取消勾选「打开密码」会删除密码并弹原生提示「锁定密码已删除」，同时清空输入框。
+- 解锁页为 4 个方形大输入框加「解锁」按钮；输满 4 位且正确时自动解锁，按钮也可手动点击。
+- PIN 以 `AES("snipaste"+PIN)` 保存：key 为 `SHA-256("snipaste")` 派生的 32 字节，AES-256-GCM 随机 nonce，配置中只有 nonce 与密文。
+- 启用后每次启动程序需先解锁；后端在所有加密/解密入口检查解锁状态，避免只挡前端。
+- **自动锁定**：设置密码后，「常规」面板的「自动锁定」复选框可用。勾选后弹原生框询问是否立即锁定：选「是」立即锁定；选「否」再弹「15分钟后锁定」提示框，从该次确认起计时。解锁成功即重置计时，空闲满 15 分钟自动锁定并弹解锁页。
+- **手动锁定**：设置密码后，「常规」面板的「手动锁定」按钮可用，点击立即锁定并弹解锁页。
+- 开关状态存于 `pin.json` 的 `autoLock` 字段；会话计时不落盘，重启程序视为锁定态。
+- 配置保存在 `%AppData%\FolderHideTool\pin.json`。
 
-## Project Structure
+### 1.6 其他
 
-Take a moment to familiarize yourself with your project structure:
+- **窗口置顶**：启动即“总在最前”（类似播放器的置顶），标签栏右端的图钉按钮可切换，选择记在 `localStorage`。
+- 日志区在「文件夹隐藏」「文件加密」「文件夹加密」面板显示，「常规」「关于」面板隐藏。
+- 内置保护：拒绝操作系统目录、程序自身目录和驱动器根目录。
+- 常规提示与错误只写入日志区（`[ERROR]` 红色、`[WARN]` 橙色、普通日志黑色）；启动时的版本行用与输入框 placeholder 相同的灰色，清空后显示灰色「暂无日志」；只有「永久删除原文件」与「自动锁定」会弹原生对话框。
 
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
+---
 
-## Next Steps
+## 2. 界面
 
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
+| 一级标签 | 内容 |
+|---|---|
+| 文件夹隐藏 | 二级标签「方案A」（路径、改名、加密 / 解密）与「方案B」（路径、加密 / 解密） |
+| 文件加密 | 目标文件（输入 / 浏览 / 拖入）、输出名称、删除原文件复选框、进度条、开始加密 / 开始解密 |
+| 文件夹加密 | 源文件夹（输入 / 浏览 / 拖入）、输出名称、删除原文件夹复选框、进度条、开始加密 / 开始解密 |
+| 常规 | 显示语言、开机启动、以管理员身份启动、打开密码、清空日志 |
+| 关于 | 版本、三种方式说明、密钥与重名策略提示 |
 
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+窗口为 **414 × 400**（最小 380 × 360）：全界面文字统一为 12px（PIN 数字输入框 16px、解锁页 24px 除外），二级标签采用页签样式（选中项与内容框融合、无下划线），常规页 PIN 输入框为 28×28 正方形；日志区去掉外框与标题、直接铺满剩余空间。
+
+---
+
+## 3. 环境要求
+
+| 组件 | 版本 |
+|---|---|
+| Go | 1.26 或更高（已在 1.27.4 验证） |
+| Wails CLI | v3.0.0 |
+| Node.js | 22（已在 22.x 验证） |
+| npm | 随 Node.js |
+| WebView2 | Windows 10 / 11 系统自带 |
+
+后端依赖 `github.com/wailsapp/wails/v3` 与 `golang.org/x/sys`；前端依赖 `@wailsio/runtime` 与 `vite`。
+
+---
+
+## 4. 使用
+
+直接运行 `bin/my-folder-encryption.exe`：
+
+**文件夹隐藏**
+
+1. 在「文件夹隐藏」下切换「方案A」或「方案B」，输入目标文件夹的完整路径。
+2. 点击「加密」使文件夹无法双击打开；点击「解密」恢复正常访问。
+3. 方案A 解密时需填写带 `..` 后缀的完整路径（加密成功后输入框会自动更新）。
+4. 方案B 解密时填写原路径即可（目录名不变）。
+
+**文件 / 文件夹加密**
+
+1. 切到「文件加密」或「文件夹加密」，通过输入、拖入或「浏览…」选定源路径。
+2. 输出名称留空即用源名称；如需先备份原文件，不要勾选「删除原文件」。
+3. 点击「开始加密」，进度条依次显示 扫描 → 打包 → 加密 → 写盘 → 校验 → 完成。
+4. 解密时点「开始解密」会弹出只过滤 `*.junx` 的选择框；输出到容器所在目录，同名自动 `(2)(3)`。
+
+---
+
+## 5. 开发与构建
+
+```bash
+# 开发调试（热重载）
+wails3 dev
+
+# 生成 Go → 前端类型绑定（修改后端方法签名后必须执行）
+wails3 generate bindings ./...
+
+# 构建前端产物到 frontend/dist
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 打包为单文件 exe，输出到 bin/my-folder-encryption.exe
+wails3 build
+
+# 后端测试
+go test ./backend -v
+```
+
+> 说明：`bin/` 与 `frontend/dist/` 已加入 `.gitignore`，仓库中不包含构建产物；发布时以 `wails3 build` 生成的 exe 为准。
+
+---
+
+## 6. 项目结构
+
+```
+.
+├── main.go                       # Wails 应用入口，注册服务与窗口
+├── go.mod / go.sum               # Go 模块依赖
+├── Taskfile.yml                  # Wails 任务编排
+├── backend/                      # Go 后端
+│   ├── service.go                # 暴露给前端的 FolderService、加解密流程与日志
+│   ├── junx.go                   # .junx 容器：打包、AES-256-GCM 封装、解包、重名
+│   ├── types.go                  # 路径规范化、名称校验、进度与拖放事件模型
+│   ├── winapi_windows.go         # 方案A：扩展路径重命名、隐藏属性、目录枚举
+│   ├── winapi_other.go           # 非 Windows 桩
+│   ├── metadata.go               # AES-256-GCM 信封与 .DS_Store 编解码
+│   ├── metadata_windows.go       # 扩展路径下 .DS_Store 读写
+│   ├── metadata_other.go
+│   ├── scheme_d_windows.go       # 方案D：DACL 备份、拒绝 ACE、恢复
+│   ├── scheme_d_other.go
+│   ├── startup.go                # StartupState 模型
+│   ├── startup_windows.go        # 开机启动与管理员运行注册表读写
+│   ├── startup_other.go
+│   ├── pin.go                    # 打开密码：AES 信封、尝试策略、持久化
+│   └── *_test.go                 # 后端测试
+├── frontend/
+│   ├── index.html                # 五个一级标签、方案二级标签与加密页结构
+│   ├── src/
+│   │   ├── main.js               # 事件绑定、服务调用、日志渲染
+│   │   └── i18n.js               # 轻量 i18n 与三语字典
+│   ├── public/style.css          # Snipaste 风格浅灰经典界面
+│   ├── bindings/                 # wails3 生成的类型绑定（勿手改）
+│   └── dist/                     # 前端构建产物
+└── build/                        # Wails 平台构建配置
+```
+
+---
+
+## 7. 测试
+
+`go test ./backend -v` 覆盖：
+
+- 方案A：隐藏 → 枚举识别 → 恢复往返、目标重名冲突、非法新名称；
+- 方案D：ACL 往返、已存在 `.DS_Store` 拒绝覆盖、损坏元数据不恢复；
+- AES 信封：加密解密往返、损坏元数据拒绝；
+- 打开密码：3/4/6 位校验、错误次数锁定与到期解锁、无限次策略不锁定、配置不含明文 PIN、未解锁时加密接口被拒绝；
+- `.junx` 容器：单文件 / 多级目录（含空目录、中文与空格名）往返、容器内不含明文名称、篡改密文与错误 magic 拒绝、不完整输入拒绝；
+- 解密重名：文件夹 `私人资料 (2)`、文件 `报告 (2).txt`（保留扩展名）；
+- 输出命名：留空取源名、自定义名称、`.JUNX` 不重复追加、非法字符清洗、Windows 保留名处理；
+- 路径安全：拒绝 `..`、绝对路径与盘符路径。
+
+当前全部通过。
+
+---
+
+## 8. 限制与注意事项
+
+1. **文件夹隐藏不是加密**。方案A 只是改名；方案B 只是 ACL 限制。7-Zip、WSL、带 `\\?\` 前缀的命令行，以及管理员或有权限的账户仍可访问或修改。只有 `.junx` 才是真正的加密容器。
+2. **`.junx` 的密钥内置在程序里**（`SHA-256("folderhide-junx-v1")`），拿到本程序的人都能离线解密，适合防误看、防随手打开，不适合对抗专业取证；也没有密码找回机制。
+3. 加密过程会把整个载荷放在内存中封装（单条 AES-GCM 消息），超大目录可能占用较多内存，建议单次不超过数百 MB。
+4. `.DS_Store` 中的密钥由内置固定字符串经 SHA-256 派生（见 `backend/metadata.go`），仅用于防止肉眼查看元数据，不具备密码学保密强度。
+5. 方案D 仅对 NTFS 有效；FAT32 / exFAT 没有 ACL。
+6. 方案D 的元数据写在被隐藏文件夹内部。若 `.DS_Store` 损坏或丢失，将无法自动恢复权限。
+7. 不要在 OneDrive 等同步目录、系统目录或程序安装目录使用。操作前请自行备份。
+8. 管理员运行标志开启后，每次程序启动都会弹出 UAC 确认。
+9. 打开密码使用硬编码 key 与 3/4/6 位数字，拿到程序的人可离线枚举，因此仅用于防止本机误用，不是安全边界。忘记密码时可删除 `%AppData%\FolderHideTool\pin.json` 重置（同时清除保护）。

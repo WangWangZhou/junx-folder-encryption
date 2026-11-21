@@ -9,42 +9,113 @@
 <body>
 <div class="app">
     <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="tabA" data-i18n="tab.a" type="button">方案A</button>
-        <button class="tab" data-tab="tabD" data-i18n="tab.d" type="button">方案D</button>
+        <button class="tab active" data-tab="tabHide" data-i18n="tab.hide" type="button">文件夹隐藏</button>
+        <button class="tab" data-tab="tabFileEnc" data-i18n="tab.fileEnc" type="button">文件加密</button>
+        <button class="tab" data-tab="tabFolderEnc" data-i18n="tab.folderEnc" type="button">文件夹加密</button>
         <button class="tab" data-tab="tabGeneral" data-i18n="tab.general" type="button">常规</button>
         <button class="tab" data-tab="tabAbout" data-i18n="tab.about" type="button">关于</button>
+        <button id="pinTopBtn" class="pin-btn" type="button" aria-pressed="true" data-i18n-title="tip.alwaysOnTop" title="">
+            <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                <path d="M6 1a4 4 0 0 0-4 4c0 3 4 6 4 6s4-3 4-6a4 4 0 0 0-4-4Zm0 2.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z" fill="currentColor"/>
+            </svg>
+        </button>
     </div>
 
     <div class="content">
-        <section class="panel active" id="tabA">
-            <fieldset class="group">
-                <legend data-i18n="group.folder">文件夹设置</legend>
+        <section class="panel active" id="tabHide">
+            <div class="subtabs" role="tablist">
+                <button class="subtab active" data-sub="subA" data-i18n="sub.a" type="button">方案A</button>
+                <button class="subtab" data-sub="subB" data-i18n="sub.b" type="button">方案B</button>
+            </div>
+
+            <section class="subpanel active" id="subA">
+                <fieldset class="group">
+                    <legend data-i18n="group.folder">文件夹加密</legend>
+                    <div class="field-row">
+                        <label for="targetPathA" data-i18n="field.targetPath">路径</label>
+                        <input id="targetPathA" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
+                    </div>
+                    <div class="field-row">
+                        <label for="newName" data-i18n="field.newName">改名</label>
+                        <input id="newName" type="text" placeholder="选填：加密前先改名" data-i18n-placeholder="placeholder.newName" autocomplete="off"/>
+                    </div>
+                </fieldset>
+                <div class="actions">
+                    <button id="encryptBtnA" class="btn" data-i18n="btn.encrypt" type="button">加密</button>
+                    <button id="decryptBtnA" class="btn" data-i18n="btn.decrypt" type="button">解密</button>
+                </div>
+            </section>
+
+            <section class="subpanel" id="subB">
+                <fieldset class="group">
+                    <legend data-i18n="group.acl">文件夹加密</legend>
+                    <div class="field-row">
+                        <label for="targetPathD" data-i18n="field.targetPath">路径</label>
+                        <input id="targetPathD" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
+                    </div>
+                </fieldset>
+                <div class="actions">
+                    <button id="encryptBtnD" class="btn" data-i18n="btn.encrypt" type="button">加密</button>
+                    <button id="decryptBtnD" class="btn" data-i18n="btn.decrypt" type="button">解密</button>
+                </div>
+            </section>
+        </section>
+
+        <section class="panel enc" id="tabFileEnc">
+            <fieldset class="group drop-target" id="fileEncDrop" data-file-drop-target="file">
+                <legend data-i18n="group.fileEnc">文件加密</legend>
                 <div class="field-row">
-                    <label for="targetPathA" data-i18n="field.targetPath">目标文件夹路径</label>
-                    <input id="targetPathA" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
+                    <label for="fileEncSrc" data-i18n="field.sourceFile">目标文件</label>
+                    <input id="fileEncSrc" type="text" placeholder="例如 D:\Private\报告.docx" data-i18n-placeholder="placeholder.filePath" autocomplete="off"/>
+                    <button id="fileEncPick" class="btn small" data-i18n="btn.browse" type="button">浏览…</button>
                 </div>
                 <div class="field-row">
-                    <label for="newName" data-i18n="field.newName">新的文件夹名称</label>
-                    <input id="newName" type="text" placeholder="选填：加密前先改为该名称" data-i18n-placeholder="placeholder.newName" autocomplete="off"/>
+                    <label for="fileEncOut" data-i18n="field.outName">输出名称</label>
+                    <input id="fileEncOut" type="text" placeholder="选填，默认同源名，自动加 .junx" data-i18n-placeholder="placeholder.outName" autocomplete="off"/>
+                </div>
+                <div class="field-row checkbox-row enc-check">
+                    <label class="checkbox-label">
+                        <input id="fileEncDelete" type="checkbox"/>
+                        <span data-i18n="chk.deleteOriginalFile">加密后删除原文件，不放入回收站</span>
+                    </label>
                 </div>
             </fieldset>
+            <div class="progress-wrap">
+                <div class="progress-bar"><div class="progress-fill" id="fileEncFill"></div></div>
+                <span class="progress-text" id="fileEncText" data-i18n="progress.idle">就绪</span>
+            </div>
             <div class="actions">
-                <button id="encryptBtnA" class="btn" data-i18n="btn.encrypt" type="button">加密</button>
-                <button id="decryptBtnA" class="btn" data-i18n="btn.decrypt" type="button">解密</button>
+                <button id="fileEncStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
+                <button id="fileEncDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
             </div>
         </section>
 
-        <section class="panel" id="tabD">
-            <fieldset class="group">
-                <legend data-i18n="group.acl">ACL 权限限制</legend>
+        <section class="panel enc" id="tabFolderEnc">
+            <fieldset class="group drop-target" id="folderEncDrop" data-file-drop-target="folder">
+                <legend data-i18n="group.folderEnc">文件夹加密</legend>
                 <div class="field-row">
-                    <label for="targetPathD" data-i18n="field.targetPath">目标文件夹路径</label>
-                    <input id="targetPathD" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
+                    <label for="folderEncSrc" data-i18n="field.sourceFolder">源文件夹</label>
+                    <input id="folderEncSrc" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.folderPath" autocomplete="off"/>
+                    <button id="folderEncPick" class="btn small" data-i18n="btn.browse" type="button">浏览…</button>
+                </div>
+                <div class="field-row">
+                    <label for="folderEncOut" data-i18n="field.outName">输出名称</label>
+                    <input id="folderEncOut" type="text" placeholder="选填，默认同目录名，自动加 .junx" data-i18n-placeholder="placeholder.outNameFolder" autocomplete="off"/>
+                </div>
+                <div class="field-row checkbox-row enc-check">
+                    <label class="checkbox-label">
+                        <input id="folderEncDelete" type="checkbox"/>
+                        <span data-i18n="chk.deleteOriginalFolder">加密后删除原文件夹，不放入回收站</span>
+                    </label>
                 </div>
             </fieldset>
+            <div class="progress-wrap">
+                <div class="progress-bar"><div class="progress-fill" id="folderEncFill"></div></div>
+                <span class="progress-text" id="folderEncText" data-i18n="progress.idle">就绪</span>
+            </div>
             <div class="actions">
-                <button id="encryptBtnD" class="btn" data-i18n="btn.encrypt" type="button">加密</button>
-                <button id="decryptBtnD" class="btn" data-i18n="btn.decrypt" type="button">解密</button>
+                <button id="folderEncStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
+                <button id="folderEncDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
             </div>
         </section>
 
@@ -68,7 +139,34 @@
                         <input id="runAsAdminChk" type="checkbox" disabled/>
                         <span data-i18n="chk.runAsAdmin">以管理员身份启动</span>
                     </label>
-                    <span id="adminInfo" class="info-icon" data-i18n-title="tip.runAsAdmin" title="启用后程序启动时将请求管理员权限（Windows 会弹出确认提示）。">ⓘ</span>
+                    <span id="adminInfo" class="info-icon" data-i18n-title="tip.runAsAdmin" title="">ⓘ</span>
+                </div>
+                <div class="field-row checkbox-row pin-enable-row">
+                    <label class="checkbox-label">
+                        <input id="pinEnableChk" type="checkbox"/>
+                        <span data-i18n="chk.pin">打开密码</span>
+                    </label>
+                    <span class="pin-fixed-hint" data-i18n="pin.fixedHint">4位数字</span>
+                    <span id="pinInfo" class="info-icon" data-i18n-title="tip.pin" title="">ⓘ</span>
+                </div>
+                <div id="pinSetupRow">
+                    <div class="field-row pin-setup-row">
+                        <div id="setupPinBoxes" class="pin-boxes"></div>
+                        <button id="pinClearBtn" class="btn small" data-i18n="btn.clear" type="button">清除</button>
+                    </div>
+                    <div class="field-row pin-setup-row">
+                        <div id="confirmPinBoxes" class="pin-boxes"></div>
+                        <button id="pinSaveBtn" class="btn small" data-i18n="btn.save" type="button">保存</button>
+                        <span id="pinSetupError" class="pin-setup-error"></span>
+                    </div>
+                </div>
+                <div class="field-row checkbox-row auto-lock-row">
+                    <label class="checkbox-label" id="autoLockLabel">
+                        <input id="autoLockChk" type="checkbox"/>
+                        <span data-i18n="chk.autoLock">自动锁定</span>
+                    </label>
+                    <span id="autoLockInfo" class="info-icon" data-i18n-title="tip.autoLock" title="">ⓘ</span>
+                    <button id="manualLockBtn" class="btn small" data-i18n="btn.manualLock" type="button">手动锁定</button>
                 </div>
             </fieldset>
             <div class="actions">
@@ -79,22 +177,32 @@
         <section class="panel about" id="tabAbout">
             <fieldset class="group">
                 <legend data-i18n="group.about">关于</legend>
-                <p class="about-title" data-i18n="about.title">文件夹隐藏工具 1.2.0</p>
-                <p data-i18n-html="about.a"><b>方案A</b>：为目录名追加 <code>..</code> 并设置隐藏属性，资源管理器双击会报“位置不可用”。</p>
-                <p data-i18n-html="about.d"><b>方案D</b>：备份目录权限后拒绝当前用户列目录；双击无法打开，解密时从目录内 <code>.DS_Store</code> 恢复原权限。</p>
-                <p class="about-warn" data-i18n="about.warn">注意：这不是加密保护。管理员或拥有权限的账户仍可修改 ACL。操作前请备份。</p>
-                <p class="about-note" data-i18n="about.note">元数据密钥由内置字符串派生。</p>
+                <p class="about-title" data-i18n="about.title">文件夹隐藏工具 1.0.0</p>
+                <p data-i18n-html="about.hide"><b>文件夹隐藏（方案A / 方案B）</b>：只改目录名或权限，不加密内容。</p>
+                <p data-i18n-html="about.enc"><b>文件 / 文件夹加密</b>：AES-256-GCM 打包为 <code>.junx</code>，内部文件名与目录树一并加密。</p>
+                <p data-i18n-html="about.key"><b>密钥内置</b>：拿到本程序即可离线解密，适合防误看，不适合对抗专业取证。</p>
+                <p data-i18n-html="about.dec">解密固定输出到 <code>.junx</code> 所在目录；重名自动追加 <code>(2)(3)</code>，绝不覆盖。</p>
+                <p class="about-warn" data-i18n="about.warn">勾选“删除原文件”后不可恢复，请先备份。</p>
             </fieldset>
         </section>
 
-        <fieldset class="group log-group" id="logGroup">
-            <legend data-i18n="group.log">日志</legend>
+        <div class="log-group" id="logGroup">
             <div class="log" id="logBox"></div>
-        </fieldset>
+        </div>
     </div>
 
     <div class="bottom">
-        <span class="hint" id="hint">方案A：解密请填写带 .. 的完整路径。</span>
+        <span class="hint" id="hint">文件夹隐藏：只改目录名与权限，不加密内容。</span>
+    </div>
+</div>
+
+<div id="lockOverlay" class="overlay hidden">
+    <div class="unlock-view">
+        <div id="unlockPin" class="pin-boxes pin-boxes-large"></div>
+        <p id="unlockMessage" class="unlock-message"></p>
+        <div class="unlock-actions">
+            <button id="unlockBtn" class="btn unlock-btn" data-i18n="btn.unlock" type="button">解锁</button>
+        </div>
     </div>
 </div>
 

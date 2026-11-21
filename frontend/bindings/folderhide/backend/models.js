@@ -7,6 +7,226 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * DropFiles 是拖放事件载荷。Target 为带 data-file-drop-target 的元素 id。
+ */
+export class DropFiles {
+    /**
+     * Creates a new DropFiles instance.
+     * @param {Partial<DropFiles>} [$$source = {}] - The source object to create the DropFiles.
+     */
+    constructor($$source = {}) {
+        if (!("Paths" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["Paths"] = [];
+        }
+        if (!("Target" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Target"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DropFiles instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DropFiles}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("Paths" in $$parsedSource) {
+            $$parsedSource["Paths"] = $$createField0_0($$parsedSource["Paths"]);
+        }
+        return new DropFiles(/** @type {Partial<DropFiles>} */($$parsedSource));
+    }
+}
+
+/**
+ * JunxProgress 是加密/解密进度事件载荷。
+ * Phase 使用固定代码（scan/build/encrypt/write/verify/extract/done），由前端翻译。
+ */
+export class JunxProgress {
+    /**
+     * Creates a new JunxProgress instance.
+     * @param {Partial<JunxProgress>} [$$source = {}] - The source object to create the JunxProgress.
+     */
+    constructor($$source = {}) {
+        if (!("Percent" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["Percent"] = 0;
+        }
+        if (!("Phase" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Phase"] = "";
+        }
+        if (!("Current" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Current"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new JunxProgress instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {JunxProgress}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new JunxProgress(/** @type {Partial<JunxProgress>} */($$parsedSource));
+    }
+}
+
+/**
+ * PinResult 是 PIN 操作的结果码与最新状态。
+ */
+export class PinResult {
+    /**
+     * Creates a new PinResult instance.
+     * @param {Partial<PinResult>} [$$source = {}] - The source object to create the PinResult.
+     */
+    constructor($$source = {}) {
+        if (!("OK" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["OK"] = false;
+        }
+        if (!("Code" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Code"] = "";
+        }
+        if (!("State" in $$source)) {
+            /**
+             * @member
+             * @type {PinState}
+             */
+            this["State"] = (new PinState());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PinResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PinResult}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("State" in $$parsedSource) {
+            $$parsedSource["State"] = $$createField2_0($$parsedSource["State"]);
+        }
+        return new PinResult(/** @type {Partial<PinResult>} */($$parsedSource));
+    }
+}
+
+/**
+ * PinState 是前端展示用的密码状态，不包含任何密文或明文密码。
+ */
+export class PinState {
+    /**
+     * Creates a new PinState instance.
+     * @param {Partial<PinState>} [$$source = {}] - The source object to create the PinState.
+     */
+    constructor($$source = {}) {
+        if (!("Enabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["Enabled"] = false;
+        }
+        if (!("Length" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["Length"] = 0;
+        }
+        if (!("Policy" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["Policy"] = "";
+        }
+        if (!("Locked" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["Locked"] = false;
+        }
+        if (!("RemainingSeconds" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["RemainingSeconds"] = 0;
+        }
+        if (!("AttemptsLeft" in $$source)) {
+            /**
+             * -1 表示无限次
+             * @member
+             * @type {number}
+             */
+            this["AttemptsLeft"] = 0;
+        }
+        if (!("AutoLock" in $$source)) {
+            /**
+             * 是否开启空闲 15 分钟自动锁定
+             * @member
+             * @type {boolean}
+             */
+            this["AutoLock"] = false;
+        }
+        if (!("SessionLocked" in $$source)) {
+            /**
+             * 当前会话是否已锁定（需输入密码解锁）
+             * @member
+             * @type {boolean}
+             */
+            this["SessionLocked"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PinState instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PinState}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PinState(/** @type {Partial<PinState>} */($$parsedSource));
+    }
+}
+
+/**
  * StartupState 表示开机启动相关设置。
  */
 export class StartupState {
@@ -43,3 +263,7 @@ export class StartupState {
         return new StartupState(/** @type {Partial<StartupState>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = PinState.createFrom;

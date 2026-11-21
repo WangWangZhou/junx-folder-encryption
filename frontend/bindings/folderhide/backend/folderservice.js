@@ -24,6 +24,28 @@ export function ClearLogs() {
 }
 
 /**
+ * ConfigurePin 在当前已解锁会话中设置或修改打开密码。
+ * @param {string} pin
+ * @param {number} length
+ * @param {string} policy
+ * @returns {$CancellablePromise<$models.PinResult>}
+ */
+export function ConfigurePin(pin, length, policy) {
+    return $Call.ByID(589463912, pin, length, policy).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * DecryptFileFromJunx 解密文件容器，输出到 .junx 所在目录，重名自动追加序号。
+ * @param {string} junxPath
+ * @returns {$CancellablePromise<void>}
+ */
+export function DecryptFileFromJunx(junxPath) {
+    return $Call.ByID(1116710833, junxPath);
+}
+
+/**
  * DecryptFolder 将隐藏后的文件夹恢复为资源管理器可访问的原名。
  * @param {string} path
  * @returns {$CancellablePromise<void>}
@@ -39,6 +61,40 @@ export function DecryptFolder(path) {
  */
 export function DecryptFolderByACL(path) {
     return $Call.ByID(3035004807, path);
+}
+
+/**
+ * DecryptFolderFromJunx 解密文件夹容器，重建目录树。
+ * @param {string} junxPath
+ * @returns {$CancellablePromise<void>}
+ */
+export function DecryptFolderFromJunx(junxPath) {
+    return $Call.ByID(1631201523, junxPath);
+}
+
+/**
+ * DisablePin 在当前已解锁会话中关闭打开密码。
+ * locale 由前端传入，用于选择"密码已删除"原生提示框的三语文案。
+ * @param {string} locale
+ * @returns {$CancellablePromise<$models.PinResult>}
+ */
+export function DisablePin(locale) {
+    return $Call.ByID(302507544, locale).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * EncryptFileToJunx 把单个文件打包为 .junx。
+ * outputName 为空时使用源文件名；勾选 deleteOriginal 时在校验通过后永久删除源文件。
+ * @param {string} path
+ * @param {string} outputName
+ * @param {boolean} deleteOriginal
+ * @param {string} locale
+ * @returns {$CancellablePromise<void>}
+ */
+export function EncryptFileToJunx(path, outputName, deleteOriginal, locale) {
+    return $Call.ByID(264531144, path, outputName, deleteOriginal, locale);
 }
 
 /**
@@ -61,11 +117,44 @@ export function EncryptFolderByACL(path) {
 }
 
 /**
+ * EncryptFolderToJunx 把整个目录树打包为 .junx，目录名与内部文件名一并加密。
+ * @param {string} path
+ * @param {string} outputName
+ * @param {boolean} deleteOriginal
+ * @param {string} locale
+ * @returns {$CancellablePromise<void>}
+ */
+export function EncryptFolderToJunx(path, outputName, deleteOriginal, locale) {
+    return $Call.ByID(3219249482, path, outputName, deleteOriginal, locale);
+}
+
+/**
+ * GetPinState 返回打开密码状态，不返回密文或明文密码。
+ * 同时惰性检查自动锁定，供前端定时轮询感知会话锁定状态。
+ * @returns {$CancellablePromise<$models.PinState>}
+ */
+export function GetPinState() {
+    return $Call.ByID(1574496005).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * GetStartupState 返回开机启动与管理员运行设置。
  * @returns {$CancellablePromise<$models.StartupState>}
  */
 export function GetStartupState() {
     return $Call.ByID(134801147).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
+}
+
+/**
+ * Lock 手动锁定当前会话，需重新输入打开密码才能继续使用。
+ * @returns {$CancellablePromise<$models.PinResult>}
+ */
+export function Lock() {
+    return $Call.ByID(3940120864).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -76,7 +165,21 @@ export function GetStartupState() {
  */
 export function RecentLogs() {
     return $Call.ByID(1632993871).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType3($result);
+    }));
+}
+
+/**
+ * SetAutoLock 开启或关闭空闲自动锁定。
+ * 开启时弹出原生询问框：选"是"立即锁定，选"否"再弹提示框并在 15 分钟后锁定。
+ * locale 由前端传入，用于选择原生对话框文案。
+ * @param {boolean} enabled
+ * @param {string} locale
+ * @returns {$CancellablePromise<$models.PinResult>}
+ */
+export function SetAutoLock(enabled, locale) {
+    return $Call.ByID(766404873, enabled, locale).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
     }));
 }
 
@@ -99,6 +202,17 @@ export function SetRunAsAdmin(enabled) {
 }
 
 /**
+ * Unlock 校验 PIN；成功则解锁本次会话，失败按策略记录次数或锁定。
+ * @param {string} pin
+ * @returns {$CancellablePromise<$models.PinResult>}
+ */
+export function Unlock(pin) {
+    return $Call.ByID(2735461583, pin).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * Version 返回纯版本号，方案说明由前端按当前语言渲染。
  * @returns {$CancellablePromise<string>}
  */
@@ -107,5 +221,7 @@ export function Version() {
 }
 
 // Private type creation functions
-const $$createType0 = $models.StartupState.createFrom;
-const $$createType1 = $Create.Array($Create.Any);
+const $$createType0 = $models.PinResult.createFrom;
+const $$createType1 = $models.PinState.createFrom;
+const $$createType2 = $models.StartupState.createFrom;
+const $$createType3 = $Create.Array($Create.Any);

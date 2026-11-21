@@ -13,13 +13,32 @@ import (
 
 // FolderService 暴露给前端的文件夹隐藏服务。
 type FolderService struct {
-	mu   sync.Mutex
-	logs []string
+	mu         sync.Mutex
+	logs       []string
+	pins       *pinStore
+	unlocked   bool
+	autoLock   bool      // 空闲自动锁定开关，与 pin.json 同步
+	unlockedAt time.Time // 本次会话解锁成功的时间，用于 15 分钟计时
 }
 
 // NewFolderService 创建服务实例。
 func NewFolderService() *FolderService {
-	return &FolderService{logs: []string{}}
+	service := &FolderService{logs: []string{}}
+	store, err := defaultPinStore()
+	if err != nil {
+		// 配置目录不可用时按未设置密码处理，避免启动失败。
+		service.pins = newPinStore(filepath.Join(os.TempDir(), pinFileName))
+		service.unlocked = true
+		return service
+	}
+	service.pins = store
+	record, configured, loadErr := store.Load()
+	service.unlocked = loadErr != nil || !configured
+	if loadErr == nil && configured {
+		service.autoLock = record.AutoLock
+	}
+	service.unlockedAt = time.Now()
+	return service
 }
 
 // ServiceName 返回服务名，供 Wails 日志与绑定生成使用。
@@ -29,7 +48,298 @@ func (s *FolderService) ServiceName() string {
 
 // Version 返回纯版本号，方案说明由前端按当前语言渲染。
 func (s *FolderService) Version() string {
-	return "1.2.0"
+	return "1.0.0"
+}
+
+// pinState 读取当前 PIN 状态；错误或缺失配置按未启用处理。
+func (s *FolderService) pinState() PinState {
+	s.mu.Lock()
+	unlocked := s.unlocked
+	autoLock := s.autoLock
+	s.mu.Unlock()
+
+	if s.pins == nil {
+		return PinState{AttemptsLeft: -1, SessionLocked: !unlocked}
+	}
+	record, configured, err := s.pins.Load()
+	if err != nil || !configured {
+		return PinState{AttemptsLeft: -1, SessionLocked: !unlocked}
+	}
+	state := pinStateFromRecord(record, true, time.Now())
+	state.AutoLock = autoLock
+	state.SessionLocked = state.Enabled && !unlocked
+	return state
+}
+
+// checkAutoLock 在已解锁且开启自动锁定时，若空闲时间达到 15 分钟则锁定会话。
+// 返回本次调用是否刚刚触发了自动锁定。
+func (s *FolderService) checkAutoLock() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.unlocked && s.autoLock && !s.unlockedAt.IsZero() && time.Since(s.unlockedAt) >= pinAutoLockIdle {
+		s.unlocked = false
+		return true
+	}
+	return false
+}
+
+// requireUnlocked 确保本次会话已通过打开密码。
+func (s *FolderService) requireUnlocked() error {
+	if s.checkAutoLock() {
+		s.appendLog("WARN", "空闲超时，已自动锁定")
+	}
+	s.mu.Lock()
+	unlocked := s.unlocked
+	s.mu.Unlock()
+	if !unlocked {
+		return fmt.Errorf("请先输入打开密码")
+	}
+	return nil
+}
+
+// guardUnlocked 与 requireUnlocked 相同，但会写入日志。
+func (s *FolderService) guardUnlocked() error {
+	err := s.requireUnlocked()
+	if err != nil {
+		s.appendLog("ERROR", err.Error())
+	}
+	return err
+}
+
+// GetPinState 返回打开密码状态，不返回密文或明文密码。
+// 同时惰性检查自动锁定，供前端定时轮询感知会话锁定状态。
+func (s *FolderService) GetPinState() PinState {
+	if s.checkAutoLock() {
+		s.appendLog("WARN", "空闲超时，已自动锁定")
+	}
+	return s.pinState()
+}
+
+// ConfigurePin 在当前已解锁会话中设置或修改打开密码。
+func (s *FolderService) ConfigurePin(pin string, length int, policy string) PinResult {
+	if err := s.requireUnlocked(); err != nil {
+		return newPinResult("locked", s.pinState())
+	}
+	if !validPin(pin, length) {
+		return newPinResult("format", s.pinState())
+	}
+	nonce, ciphertext, err := sealPIN(pin)
+	if err != nil {
+		s.appendLog("ERROR", err.Error())
+		return newPinResult("error", s.pinState())
+	}
+	s.mu.Lock()
+	autoLock := s.autoLock
+	s.mu.Unlock()
+	record := pinRecord{
+		Nonce:      nonce,
+		Ciphertext: ciphertext,
+		Length:     length,
+		Policy:     normalizePinPolicy(policy),
+		AutoLock:   autoLock,
+	}
+	if err := s.pins.Save(record); err != nil {
+		s.appendLog("ERROR", err.Error())
+		return newPinResult("error", s.pinState())
+	}
+	s.mu.Lock()
+	s.unlocked = true
+	s.unlockedAt = time.Now()
+	s.mu.Unlock()
+	s.appendLog("INFO", "打开密码已设置")
+	return newPinResult("ok", s.pinState())
+}
+
+// DisablePin 在当前已解锁会话中关闭打开密码。
+// locale 由前端传入，用于选择"密码已删除"原生提示框的三语文案。
+func (s *FolderService) DisablePin(locale string) PinResult {
+	if err := s.requireUnlocked(); err != nil {
+		return newPinResult("locked", s.pinState())
+	}
+	if err := s.pins.Clear(); err != nil {
+		s.appendLog("ERROR", err.Error())
+		return newPinResult("error", s.pinState())
+	}
+	s.mu.Lock()
+	s.unlocked = true
+	s.autoLock = false
+	s.unlockedAt = time.Now()
+	s.mu.Unlock()
+	s.appendLog("INFO", "打开密码已关闭")
+	showPinDeletedNotice(pinDeletedNoticeFor(locale))
+	return newPinResult("ok", s.pinState())
+}
+
+// Unlock 校验 PIN；成功则解锁本次会话，失败按策略记录次数或锁定。
+func (s *FolderService) Unlock(pin string) PinResult {
+	state := s.pinState()
+	if !state.Enabled {
+		s.mu.Lock()
+		s.unlocked = true
+		s.unlockedAt = time.Now()
+		s.mu.Unlock()
+		return newPinResult("disabled", state)
+	}
+	if state.Locked {
+		return newPinResult("locked", state)
+	}
+
+	s.mu.Lock()
+	record, configured, err := s.pins.Load()
+	if err != nil || !configured {
+		s.mu.Unlock()
+		return newPinResult("error", s.pinState())
+	}
+	if !validPin(pin, record.Length) {
+		s.mu.Unlock()
+		return newPinResult("format", pinStateFromRecord(record, true, time.Now()))
+	}
+	ok, err := openPIN(record, pin)
+	if err != nil {
+		s.mu.Unlock()
+		s.appendLog("ERROR", err.Error())
+		return newPinResult("error", s.pinState())
+	}
+	if !ok {
+		now := time.Now()
+		recordPinFailure(&record, now)
+		if err := s.pins.Save(record); err != nil {
+			s.mu.Unlock()
+			s.appendLog("ERROR", err.Error())
+			return newPinResult("error", s.pinState())
+		}
+		s.unlocked = false
+		s.mu.Unlock()
+		next := pinStateFromRecord(record, true, time.Now())
+		if next.Locked {
+			s.appendLog("WARN", "密码错误次数过多，已锁定")
+		} else {
+			s.appendLog("WARN", "打开密码错误")
+		}
+		return newPinResult("mismatch", next)
+	}
+
+	resetPinFailures(&record)
+	if err := s.pins.Save(record); err != nil {
+		s.mu.Unlock()
+		s.appendLog("ERROR", err.Error())
+		return newPinResult("error", s.pinState())
+	}
+	s.unlocked = true
+	s.autoLock = record.AutoLock
+	s.unlockedAt = time.Now()
+	s.mu.Unlock()
+	s.appendLog("INFO", "已解锁")
+	return newPinResult("ok", s.pinState())
+}
+
+// SetAutoLock 开启或关闭空闲自动锁定。
+// 开启时弹出原生询问框：选"是"立即锁定，选"否"再弹提示框并在 15 分钟后锁定。
+// locale 由前端传入，用于选择原生对话框文案。
+func (s *FolderService) SetAutoLock(enabled bool, locale string) PinResult {
+	if !enabled {
+		if err := s.saveAutoLock(false); err != nil {
+			s.appendLog("ERROR", err.Error())
+			return newPinResult("error", s.pinState())
+		}
+		s.appendLog("INFO", "已关闭空闲自动锁定")
+		return newPinResult("ok", s.pinState())
+	}
+
+	text := autoLockDialogTextFor(locale)
+	immediate := askImmediateLock(text)
+	if immediate {
+		if err := s.saveAutoLock(true); err != nil {
+			s.appendLog("ERROR", err.Error())
+			return newPinResult("error", s.pinState())
+		}
+		s.mu.Lock()
+		s.unlocked = false
+		s.unlockedAt = time.Now()
+		s.mu.Unlock()
+		s.appendLog("INFO", "已开启空闲自动锁定并立即锁定")
+		return newPinResult("ok", s.pinState())
+	}
+
+	showAutoLockNotice(text)
+	if err := s.saveAutoLock(true); err != nil {
+		s.appendLog("ERROR", err.Error())
+		return newPinResult("error", s.pinState())
+	}
+	s.mu.Lock()
+	s.unlockedAt = time.Now()
+	s.mu.Unlock()
+	s.appendLog("INFO", "已开启空闲自动锁定，15 分钟后锁定")
+	return newPinResult("ok", s.pinState())
+}
+
+// saveAutoLock 将自动锁定开关持久化到 pin.json 并同步内存状态。
+func (s *FolderService) saveAutoLock(enabled bool) error {
+	record, configured, err := s.pins.Load()
+	if err != nil {
+		return err
+	}
+	if !configured {
+		return fmt.Errorf("请先设置打开密码")
+	}
+	record.AutoLock = enabled
+	if err := s.pins.Save(record); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.autoLock = enabled
+	if !enabled {
+		s.unlockedAt = time.Time{}
+	}
+	s.mu.Unlock()
+	return nil
+}
+
+// Lock 手动锁定当前会话，需重新输入打开密码才能继续使用。
+func (s *FolderService) Lock() PinResult {
+	s.mu.Lock()
+	s.unlocked = false
+	s.unlockedAt = time.Time{}
+	s.mu.Unlock()
+	s.appendLog("INFO", "已手动锁定")
+	return newPinResult("ok", s.pinState())
+}
+
+// askImmediateLock 弹出原生问答框，返回用户是否选择"是"（立即锁定）。
+func askImmediateLock(text autoLockDialogText) bool {
+	app := application.Get()
+	if app == nil {
+		return false
+	}
+	answer := false
+	dialog := app.Dialog.Question().SetTitle(text.Title).SetMessage(text.Question)
+	yes := dialog.AddButton(text.Yes)
+	no := dialog.AddButton(text.No)
+	dialog.SetDefaultButton(no)
+	dialog.SetCancelButton(no)
+	yes.OnClick(func() { answer = true })
+	no.OnClick(func() { answer = false })
+	dialog.Show()
+	return answer
+}
+
+// showAutoLockNotice 弹出只有一个"确定"按钮的原生提示框。
+func showAutoLockNotice(text autoLockDialogText) {
+	showNativeNotice(text.InfoTitle, text.InfoMessage)
+}
+
+// showPinDeletedNotice 弹出"密码已删除"原生提示框。
+func showPinDeletedNotice(text pinDeletedNotice) {
+	showNativeNotice(text.Title, text.Message)
+}
+
+// showNativeNotice 弹出只有一个"确定"按钮的原生提示框。
+func showNativeNotice(title, message string) {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	app.Dialog.Info().SetTitle(title).SetMessage(message).Show()
 }
 
 // appendLog 记录日志并向前端推送事件。
@@ -49,6 +359,9 @@ func (s *FolderService) appendLog(level, message string) {
 
 // EncryptFolder 隐藏文件夹。若填写了新名称，先改名再隐藏。
 func (s *FolderService) EncryptFolder(path, newName string) error {
+	if err := s.guardUnlocked(); err != nil {
+		return err
+	}
 	if isProtectedPath(path) {
 		err := fmt.Errorf("拒绝操作系统目录或程序自身目录: %s", path)
 		s.appendLog("ERROR", err.Error())
@@ -69,6 +382,9 @@ func (s *FolderService) EncryptFolder(path, newName string) error {
 
 // DecryptFolder 将隐藏后的文件夹恢复为资源管理器可访问的原名。
 func (s *FolderService) DecryptFolder(path string) error {
+	if err := s.guardUnlocked(); err != nil {
+		return err
+	}
 	restoredPath, err := showFolder(path)
 	if err != nil {
 		s.appendLog("ERROR", err.Error())
@@ -80,6 +396,9 @@ func (s *FolderService) DecryptFolder(path string) error {
 
 // EncryptFolderByACL 使用方案 D 隐藏文件夹：备份 DACL，加密写入内部 .DS_Store，并拒绝当前用户列目录。
 func (s *FolderService) EncryptFolderByACL(path string) error {
+	if err := s.guardUnlocked(); err != nil {
+		return err
+	}
 	if isProtectedPath(path) {
 		err := fmt.Errorf("拒绝操作系统目录或程序自身目录: %s", path)
 		s.appendLog("ERROR", err.Error())
@@ -96,6 +415,9 @@ func (s *FolderService) EncryptFolderByACL(path string) error {
 
 // DecryptFolderByACL 读取内部 .DS_Store 恢复 DACL，使资源管理器可以再次打开目录。
 func (s *FolderService) DecryptFolderByACL(path string) error {
+	if err := s.guardUnlocked(); err != nil {
+		return err
+	}
 	if isProtectedPath(path) {
 		err := fmt.Errorf("拒绝操作系统目录或程序自身目录: %s", path)
 		s.appendLog("ERROR", err.Error())
@@ -111,6 +433,243 @@ func (s *FolderService) DecryptFolderByACL(path string) error {
 		s.appendLog("WARN", warning)
 	}
 	return nil
+}
+
+// EncryptFileToJunx 把单个文件打包为 .junx。
+// outputName 为空时使用源文件名；勾选 deleteOriginal 时在校验通过后永久删除源文件。
+func (s *FolderService) EncryptFileToJunx(path, outputName string, deleteOriginal bool, locale string) error {
+	return s.encryptToJunx(path, junxFileKind, outputName, deleteOriginal, locale)
+}
+
+// EncryptFolderToJunx 把整个目录树打包为 .junx，目录名与内部文件名一并加密。
+func (s *FolderService) EncryptFolderToJunx(path, outputName string, deleteOriginal bool, locale string) error {
+	return s.encryptToJunx(path, junxFolderKind, outputName, deleteOriginal, locale)
+}
+
+// DecryptFileFromJunx 解密文件容器，输出到 .junx 所在目录，重名自动追加序号。
+func (s *FolderService) DecryptFileFromJunx(junxPath string) error {
+	return s.decryptFromJunx(junxPath, junxFileKind)
+}
+
+// DecryptFolderFromJunx 解密文件夹容器，重建目录树。
+func (s *FolderService) DecryptFolderFromJunx(junxPath string) error {
+	return s.decryptFromJunx(junxPath, junxFolderKind)
+}
+
+// encryptToJunx 加密主流程：扫描 → 打包 → 封装 → 写盘 → 回读校验 → 可选删除源。
+func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOriginal bool, locale string) error {
+	if err := s.guardUnlocked(); err != nil {
+		return err
+	}
+	src = strings.TrimSpace(src)
+	if src == "" {
+		return s.fail(fmt.Errorf("请选择要加密的路径"))
+	}
+	if isProtectedPath(src) {
+		return s.fail(fmt.Errorf("拒绝操作系统目录或程序自身目录: %s", src))
+	}
+
+	info, err := os.Stat(src)
+	if err != nil {
+		return s.fail(fmt.Errorf("读取源路径失败: %w", err))
+	}
+	if kind == junxFileKind && !info.Mode().IsRegular() {
+		return s.fail(fmt.Errorf("不是普通文件: %s", src))
+	}
+	if kind == junxFolderKind && !info.IsDir() {
+		return s.fail(fmt.Errorf("不是文件夹: %s", src))
+	}
+
+	absSrc, err := filepath.Abs(src)
+	if err != nil {
+		return s.fail(err)
+	}
+	outPath, err := junxOutputPath(absSrc, outputName)
+	if err != nil {
+		return s.fail(err)
+	}
+	if samePath(absSrc, outPath) {
+		return s.fail(fmt.Errorf("输出路径不能与源路径相同"))
+	}
+	if kind == junxFolderKind && isInsidePath(absSrc, outPath) {
+		return s.fail(fmt.Errorf("输出文件不能放在源文件夹内部"))
+	}
+	if _, statErr := os.Stat(outPath); statErr == nil {
+		return s.fail(fmt.Errorf("目标文件已存在，请换一个输出名称: %s", outPath))
+	}
+
+	emit := s.junxEmitter()
+	emit("scan", 0, filepath.Base(absSrc))
+	payload, err := buildJunxPayload(absSrc, kind, emit)
+	if err != nil {
+		return s.fail(err)
+	}
+
+	plain, err := packJunxPayload(payload.manifest, payload.body)
+	if err != nil {
+		return s.fail(err)
+	}
+	emit("encrypt", 74, filepath.Base(absSrc))
+	sealed, err := sealJunxData(plain)
+	if err != nil {
+		return s.fail(err)
+	}
+
+	// 先写临时文件，校验通过后再改名，避免中途失败留下半个容器。
+	tmpPath := outPath + ".tmp"
+	emit("write", 86, filepath.Base(outPath))
+	if err := os.WriteFile(tmpPath, sealed, 0o600); err != nil {
+		return s.fail(fmt.Errorf("写入失败: %w", err))
+	}
+	emit("verify", 93, filepath.Base(outPath))
+	if err := verifyJunxFile(tmpPath, payload); err != nil {
+		_ = os.Remove(tmpPath)
+		return s.fail(err)
+	}
+	if err := os.Rename(tmpPath, outPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return s.fail(fmt.Errorf("保存失败: %w", err))
+	}
+
+	if kind == junxFileKind {
+		s.appendLog("INFO", "已加密: "+outPath)
+	} else {
+		s.appendLog("INFO", fmt.Sprintf("已加密: %s（%d 个文件，%d 个目录）", outPath, payload.files, payload.dirs))
+	}
+	if payload.skipped > 0 {
+		s.appendLog("WARN", fmt.Sprintf("已跳过 %d 个符号链接或特殊文件", payload.skipped))
+	}
+
+	if deleteOriginal {
+		if askDeleteOriginal(locale, filepath.Base(absSrc), kind == junxFolderKind) {
+			if err := os.RemoveAll(absSrc); err != nil {
+				return s.fail(fmt.Errorf("删除原路径失败: %w", err))
+			}
+			s.appendLog("WARN", "已永久删除原路径: "+absSrc)
+		} else {
+			s.appendLog("INFO", "已保留原路径: "+absSrc)
+		}
+	}
+
+	emit("done", 100, "")
+	return nil
+}
+
+// decryptFromJunx 解密主流程：读容器 → 校验类型 → 按 manifest 重建。
+func (s *FolderService) decryptFromJunx(junxPath, wantKind string) error {
+	if err := s.guardUnlocked(); err != nil {
+		return err
+	}
+	junxPath = strings.TrimSpace(junxPath)
+	if junxPath == "" {
+		return s.fail(fmt.Errorf("请选择要解密的 .junx 文件"))
+	}
+	if isProtectedPath(junxPath) {
+		return s.fail(fmt.Errorf("拒绝操作系统目录或程序自身目录: %s", junxPath))
+	}
+	info, err := os.Stat(junxPath)
+	if err != nil {
+		return s.fail(fmt.Errorf("读取容器失败: %w", err))
+	}
+	if !info.Mode().IsRegular() {
+		return s.fail(fmt.Errorf("不是 .junx 文件: %s", junxPath))
+	}
+	absPath, err := filepath.Abs(junxPath)
+	if err != nil {
+		return s.fail(err)
+	}
+
+	emit := s.junxEmitter()
+	emit("scan", 0, filepath.Base(absPath))
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return s.fail(fmt.Errorf("读取容器失败: %w", err))
+	}
+	emit("decrypt", 30, filepath.Base(absPath))
+
+	manifest, body, err := openJunxData(data)
+	if err != nil {
+		return s.fail(err)
+	}
+	if manifest.Kind != wantKind {
+		return s.fail(errJunxKindMismatch(wantKind, manifest.Kind))
+	}
+
+	emit("extract", 50, manifest.Name)
+	target, err := unpackJunxPayload(manifest, body, filepath.Dir(absPath), emit)
+	if err != nil {
+		return s.fail(err)
+	}
+	s.appendLog("INFO", "已解密到: "+target)
+	emit("done", 100, "")
+	return nil
+}
+
+// verifyJunxFile 回读刚写出的临时容器，确认能解密且清单与内存一致。
+func verifyJunxFile(path string, payload *junxPayload) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("校验失败：无法回读: %w", err)
+	}
+	manifest, body, err := openJunxData(data)
+	if err != nil {
+		return fmt.Errorf("校验失败：%w", err)
+	}
+	if manifest.Kind != payload.manifest.Kind || manifest.Name != payload.manifest.Name {
+		return fmt.Errorf("校验失败：容器信息与源不一致")
+	}
+	if len(manifest.Entries) != len(payload.manifest.Entries) {
+		return fmt.Errorf("校验失败：条目数量不一致")
+	}
+	if len(body) != len(payload.body) {
+		return fmt.Errorf("校验失败：内容长度不一致")
+	}
+	return validateJunxManifest(manifest, body)
+}
+
+// junxEmitter 返回向前端推送 folder-progress 事件的回调；无 GUI 时静默跳过。
+func (s *FolderService) junxEmitter() junxProgressFunc {
+	return func(phase string, percent int, current string) {
+		if app := application.Get(); app != nil {
+			app.Event.Emit("folder-progress", JunxProgress{Percent: percent, Phase: phase, Current: current})
+		}
+	}
+}
+
+// fail 记录错误日志并原样返回，保持各接口的错误处理风格一致。
+func (s *FolderService) fail(err error) error {
+	s.appendLog("ERROR", err.Error())
+	return err
+}
+
+// samePath 按 Windows 习惯忽略大小写比较两个绝对路径。
+func samePath(a, b string) bool {
+	return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
+}
+
+// isInsidePath 判断 path 是否位于 dir 内部。
+func isInsidePath(dir, path string) bool {
+	base := strings.ToLower(filepath.Clean(dir)) + string(os.PathSeparator)
+	return strings.HasPrefix(strings.ToLower(filepath.Clean(path)), base)
+}
+
+// askDeleteOriginal 弹出原生二次确认框，默认按钮为"保留"。
+func askDeleteOriginal(locale, name string, isFolder bool) bool {
+	app := application.Get()
+	if app == nil {
+		return false
+	}
+	text := deleteOriginalTextFor(locale, name, isFolder)
+	answer := false
+	dialog := app.Dialog.Question().SetTitle(text.Title).SetMessage(text.Question)
+	yes := dialog.AddButton(text.Yes)
+	no := dialog.AddButton(text.No)
+	dialog.SetDefaultButton(no)
+	dialog.SetCancelButton(no)
+	yes.OnClick(func() { answer = true })
+	no.OnClick(func() { answer = false })
+	dialog.Show()
+	return answer
 }
 
 // RecentLogs 返回最近的日志。

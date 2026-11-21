@@ -11,6 +11,20 @@ import (
 // 在资源管理器中双击时会被解析成一个不存在的名字，从而无法打开。
 const HideSuffix = ".."
 
+// JunxProgress 是加密/解密进度事件载荷。
+// Phase 使用固定代码（scan/build/encrypt/write/verify/extract/done），由前端翻译。
+type JunxProgress struct {
+	Percent int
+	Phase   string
+	Current string
+}
+
+// DropFiles 是拖放事件载荷。Target 为带 data-file-drop-target 的元素 id。
+type DropFiles struct {
+	Paths  []string
+	Target string
+}
+
 // FolderEntry 表示父文件夹中的一个子目录。
 type FolderEntry struct {
 	Name   string `json:"name"`

@@ -5,6 +5,8 @@
     --line: #d4d4d4;
     --text: #000000;
     --muted: #555555;
+    /* 输入框 placeholder 与日志初始行/空态共用同一个灰，保证视觉一致 */
+    --placeholder: #7a7a7a;
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
@@ -25,6 +27,7 @@ body {
 }
 
 .app {
+    position: relative;
     display: flex;
     flex-direction: column;
     height: 100vh;
@@ -43,7 +46,7 @@ body {
 
 .tab {
     height: 22px;
-    padding: 0 11px;
+    padding: 0 8px;
     border: 1px solid transparent;
     border-bottom: none;
     border-radius: 0;
@@ -61,6 +64,68 @@ body {
     border-bottom-color: var(--bg);
 }
 
+/* 置顶按钮：停靠在一级标签栏右端，类似播放器的"总在最前"图钉 */
+.pin-btn {
+    margin-left: auto;
+    margin-right: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: #7a7a7a;
+    cursor: pointer;
+}
+
+.pin-btn:hover {
+    color: #333333;
+    border-color: var(--line);
+}
+
+.pin-btn[aria-pressed="true"] {
+    color: #0067c0;
+    background: #dfe8f3;
+    border-color: #7ea6d9;
+}
+
+/* 二级标签：参考 Snipaste 的页签样式。
+   相邻页签共用边框，选中的与下方内容框同色并去掉下边框，形成"融合"效果。 */
+.subtabs {
+    display: flex;
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 1;
+    /* 向下压 1px 盖住内容框的上边框，避免出现一条横线 */
+    margin-bottom: -1px;
+}
+
+.subtab {
+    height: 24px;
+    padding: 0 12px;
+    margin-left: -1px;
+    border: 1px solid var(--line);
+    border-radius: 0;
+    background: #e8e8e8;
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    cursor: default;
+}
+
+.subtab:first-child {
+    margin-left: 0;
+}
+
+.subtab.active {
+    background: var(--bg);
+    border-bottom-color: var(--bg);
+    font-weight: 600;
+}
+
 .content {
     flex: 1;
     display: flex;
@@ -74,10 +139,33 @@ body {
     display: none;
     flex-direction: column;
     gap: 6px;
+    /* 414×319 下常规面板高度可能超出，允许面板内部滚动 */
+    overflow-y: auto;
 }
 
 .panel.active {
     display: flex;
+}
+
+.subpanel {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.subpanel.active {
+    display: flex;
+}
+
+/* 二级标签需要与下方内容框贴合，因此这一页的纵向间距交给子面板自己控制 */
+#tabHide {
+    gap: 0;
+}
+
+/* 加密页在 414×319 内需要容纳 3 行表单 + 进度条，空间不足时允许纵向滚动 */
+.panel.enc {
+    gap: 5px;
+    overflow-y: auto;
 }
 
 .group {
@@ -90,7 +178,7 @@ body {
 .group legend {
     padding: 0 4px;
     color: var(--text);
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .field-row {
@@ -101,10 +189,28 @@ body {
 }
 
 .field-row label {
-    flex: 0 0 84px;
     color: var(--text);
     font-size: 12px;
     white-space: nowrap;
+}
+
+/* 表单标签按页面自身最长的标签定宽：
+   同一页内输入框左边缘对齐，又不会因为写死 84px 产生大片空隙。
+   label[for] 用于排除同一行里的复选框标签。 */
+.field-row > label[for] {
+    flex: 0 0 auto;
+}
+
+#tabHide .field-row > label[for] {
+    min-width: 2.5em;
+}
+
+#tabFileEnc .field-row > label[for] {
+    min-width: 4em;
+}
+
+#tabFolderEnc .field-row > label[for] {
+    min-width: 5em;
 }
 
 input[type="text"],
@@ -118,6 +224,11 @@ select {
     background: var(--panel);
     color: var(--text);
     font: inherit;
+}
+
+input[type="text"]::placeholder {
+    color: var(--placeholder);
+    opacity: 1;
 }
 
 input[type="text"]:focus,
@@ -173,8 +284,8 @@ select:focus {
 
 .about p {
     margin: 3px 0;
-    font-size: 11px;
-    line-height: 1.35;
+    font-size: 12px;
+    line-height: 1.45;
 }
 
 .about-title {
@@ -198,17 +309,18 @@ select:focus {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 70px;
+    min-height: 48px;
 }
 
+/* 日志区不再套 fieldset：去掉边框与标题，白色填充直接当文本终端用 */
 .log {
     flex: 1;
     overflow: auto;
-    padding: 4px 6px;
-    border: 1px solid var(--border);
+    padding: 2px 4px;
+    border: 0;
     background: var(--panel);
     font-family: Consolas, "Courier New", monospace;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.45;
     color: #222222;
 }
@@ -216,6 +328,17 @@ select:focus {
 .log-line {
     white-space: pre-wrap;
     word-break: break-all;
+}
+
+/* 启动时的版本行等"初始文字"，与输入框 placeholder 同色 */
+.log-line.initial {
+    color: var(--placeholder);
+}
+
+/* 清空日志后显示的空态提示，同样使用 placeholder 灰 */
+.log:empty::before {
+    content: attr(data-empty);
+    color: var(--placeholder);
 }
 
 .log-line.error {
@@ -261,6 +384,54 @@ select:focus {
     color: #7a7a7a;
 }
 
+.pin-fixed-hint {
+    flex: 0 0 auto;
+    color: var(--muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.pin-enable-row {
+    gap: 9px;
+}
+
+.auto-lock-row {
+    gap: 9px;
+}
+
+.auto-lock-row .btn {
+    margin-left: auto;
+}
+
+.auto-lock-row .btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+#pinSetupRow.is-disabled {
+    opacity: 0.45;
+}
+
+#pinSetupRow.is-disabled .pin-digit,
+#pinSetupRow.is-disabled .btn {
+    pointer-events: none;
+}
+
+.pin-setup-row {
+    gap: 6px;
+    min-height: 30px;
+}
+
+.pin-setup-error {
+    flex: 1;
+    min-width: 0;
+    color: #b00020;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .info-icon {
     flex: 0 0 auto;
     color: var(--muted);
@@ -274,14 +445,141 @@ select:focus {
     align-items: center;
     gap: 6px;
     flex: 0 0 auto;
-    padding-top: 5px;
+    padding-top: 4px;
 }
 
 .hint {
     flex: 1;
     min-width: 0;
     color: var(--muted);
-    font-size: 10px;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.btn.small {
+    height: 23px;
+    padding: 0 8px;
+}
+
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+}
+
+.unlock-view {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding-bottom: 24px;
+}
+
+.pin-boxes {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pin-digit {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--panel);
+    color: var(--text);
+    font: 16px "Segoe UI", sans-serif;
+    text-align: center;
+}
+
+.pin-digit:focus {
+    outline: 1px solid #4a8cf7;
+    outline-offset: -2px;
+}
+
+/* 解锁页：4 个粗边框方形大输入框 */
+.pin-boxes-large {
+    gap: 18px;
+}
+
+/* 解锁页长宽更大，字号相应调大，其余样式继承 .pin-digit */
+.pin-boxes-large .pin-digit {
+    width: 54px;
+    height: 54px;
+    font-size: 24px;
+}
+
+.pin-boxes-large .pin-digit:focus {
+    outline: none;
+}
+
+.unlock-message {
+    min-height: 16px;
+    margin: 22px 0 0;
+    color: #b00020;
+    font-size: 11px;
+    text-align: center;
+}
+
+.unlock-actions {
+    position: absolute;
+    right: 22px;
+    bottom: 20px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.unlock-btn {
+    min-width: 64px;
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.enc-check {
+    margin-top: 5px;
+}
+
+/* 加密页：进度条 + 百分比/阶段文字 */
+.progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 10px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+}
+
+.progress-fill {
+    width: 0;
+    height: 100%;
+    background: #0067c0;
+    transition: width 0.12s linear;
+}
+
+.progress-text {
+    flex: 0 0 auto;
+    min-width: 76px;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: right;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
