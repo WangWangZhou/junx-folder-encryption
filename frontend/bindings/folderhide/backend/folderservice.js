@@ -227,6 +227,14 @@ export function ProbePaths(paths) {
 }
 
 /**
+ * Quit 退出应用程序。托盘菜单与常规页的退出按钮共用此入口。
+ * @returns {$CancellablePromise<void>}
+ */
+export function Quit() {
+    return $Call.ByID(3002498416);
+}
+
+/**
  * RecentLogs 返回最近的日志。
  * @returns {$CancellablePromise<string[]>}
  */

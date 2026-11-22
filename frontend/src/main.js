@@ -31,6 +31,7 @@ const changeConfigBtn = el("changeConfigBtn");
 const logLevelSelect = el("logLevelSelect");
 const openLogFileBtn = el("openLogFileBtn");
 const resetConfigBtn = el("resetConfigBtn");
+const quitBtn = el("quitBtn");
 
 // 打开密码固定为 4 位、无限次尝试。
 const PIN_LENGTH = 4;
@@ -1355,6 +1356,10 @@ openLogFileBtn.addEventListener("click", async () => {
     } catch (err) {
         showError(err);
     }
+});
+
+quitBtn.addEventListener("click", () => {
+    FolderService.Quit();
 });
 
 resetConfigBtn.addEventListener("click", async () => {

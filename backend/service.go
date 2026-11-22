@@ -67,6 +67,13 @@ func (s *FolderService) Version() string {
 	return "1.0.0"
 }
 
+// Quit 退出应用程序。托盘菜单与常规页的退出按钮共用此入口。
+func (s *FolderService) Quit() {
+	if app := application.Get(); app != nil {
+		app.Quit()
+	}
+}
+
 // pinState 读取当前 PIN 状态；错误或缺失配置按未启用处理。
 func (s *FolderService) pinState() PinState {
 	s.mu.Lock()
