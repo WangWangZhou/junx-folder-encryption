@@ -115,6 +115,9 @@ SectionEnd
 Section "uninstall" 
     !insertmacro wails.setShellContext
 
+    DeleteRegKey HKCU "Software\FolderHideTool"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "FolderHideTool"
+
     RMDir /r "$AppData\${PRODUCT_EXECUTABLE}" # Remove the WebView2 DataPath
 
     RMDir /r $INSTDIR

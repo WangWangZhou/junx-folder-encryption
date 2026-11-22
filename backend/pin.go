@@ -6,12 +6,8 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -26,8 +22,6 @@ const (
 	pinWindow       = 5 * time.Minute
 	pinMaxFailures  = 10
 	pinAutoLockIdle = 15 * time.Minute
-	pinFileName     = "pin.json"
-	pinFileDirName  = "FolderHideTool"
 )
 
 // autoLockDialogText 是"自动锁定"原生对话框的三语文案。
@@ -119,7 +113,7 @@ type PinResult struct {
 	State PinState
 }
 
-// pinRecord 是持久化到 pin.json 的内容。
+// pinRecord 是持久化到 config.jsonc 的 PIN 配置。
 // Nonce/Ciphertext 是 AES("snipaste"+PIN) 的 GCM 信封，不保存明文 PIN。
 type pinRecord struct {
 	Magic       string `json:"magic"`
@@ -134,34 +128,32 @@ type pinRecord struct {
 	AutoLock    bool   `json:"autoLock"`
 }
 
+// pinStore 是 config.jsonc 中 PIN 段的视图，保留原有服务层调用方式。
 type pinStore struct {
-	path string
+	config *configStore
 }
 
 func newPinStore(path string) *pinStore {
-	return &pinStore{path: path}
+	return &pinStore{config: newConfigStore(path)}
 }
 
 func defaultPinStore() (*pinStore, error) {
-	dir, err := os.UserConfigDir()
+	store, err := defaultConfigStore()
 	if err != nil {
-		return nil, fmt.Errorf("获取配置目录失败: %w", err)
+		return nil, err
 	}
-	return newPinStore(filepath.Join(dir, pinFileDirName, pinFileName)), nil
+	return &pinStore{config: store}, nil
 }
 
 func (ps *pinStore) Load() (pinRecord, bool, error) {
-	data, err := os.ReadFile(ps.path)
-	if errors.Is(err, os.ErrNotExist) {
-		return pinRecord{}, false, nil
-	}
+	cfg, err := ps.config.Load()
 	if err != nil {
 		return pinRecord{}, false, err
 	}
-	var record pinRecord
-	if err := json.Unmarshal(data, &record); err != nil {
-		return pinRecord{}, false, fmt.Errorf("密码配置文件格式损坏: %w", err)
+	if cfg.Pin == nil {
+		return pinRecord{}, false, nil
 	}
+	record := *cfg.Pin
 	if record.Magic != pinMagic || record.Version != pinVersion {
 		return pinRecord{}, false, fmt.Errorf("密码配置文件版本不受支持")
 	}
@@ -176,21 +168,21 @@ func (ps *pinStore) Save(record pinRecord) error {
 	record.Magic = pinMagic
 	record.Version = pinVersion
 	record.Policy = normalizePinPolicy(record.Policy)
-	data, err := json.MarshalIndent(record, "", "  ")
+	cfg, err := ps.config.Load()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(ps.path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(ps.path, data, 0o600)
+	cfg.Pin = &record
+	return ps.config.Save(cfg)
 }
 
 func (ps *pinStore) Clear() error {
-	if err := os.Remove(ps.path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	cfg, err := ps.config.Load()
+	if err != nil {
 		return err
 	}
-	return nil
+	cfg.Pin = nil
+	return ps.config.Save(cfg)
 }
 
 func validPinLength(length int) bool {

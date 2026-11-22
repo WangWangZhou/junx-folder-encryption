@@ -25,6 +25,12 @@ const autoLockChk = el("autoLockChk");
 const autoLockLabel = el("autoLockLabel");
 const manualLockBtn = el("manualLockBtn");
 const pinTopBtn = el("pinTopBtn");
+const openConfigBtn = el("openConfigBtn");
+const openConfigFolderBtn = el("openConfigFolderBtn");
+const changeConfigBtn = el("changeConfigBtn");
+const logLevelSelect = el("logLevelSelect");
+const openLogFileBtn = el("openLogFileBtn");
+const resetConfigBtn = el("resetConfigBtn");
 
 // 打开密码固定为 4 位、无限次尝试。
 const PIN_LENGTH = 4;
@@ -131,6 +137,11 @@ async function applyPinTop(enabled) {
         return;
     }
     try {
+        await FolderService.SetAlwaysOnTop(enabled);
+    } catch (err) {
+        showError(err);
+    }
+    try {
         localStorage.setItem(PIN_TOP_KEY, enabled ? "1" : "0");
     } catch (_) {
         // 持久化失败只影响下次启动的默认状态，不影响本次切换。
@@ -157,6 +168,14 @@ function switchTab(tabId) {
     currentTab = tabId;
     refreshHint();
     logGroup.classList.toggle("hidden", tabId === "tabAbout" || tabId === "tabGeneral");
+
+    if (tabId === "tabGeneral" && !batch.open) {
+        // 面板显示后再测量：ResizeObserver 此时通常不会触发，必须主动拉长窗口。
+        requestAnimationFrame(() => requestAnimationFrame(scheduleGeneralResize));
+    } else if (!batch.open && lastGeneralHeight !== SINGLE_SIZE.height) {
+        lastGeneralHeight = SINGLE_SIZE.height;
+        setWindowSize(SINGLE_SIZE).catch(showError);
+    }
 
     // 离开批量任务所属页面时收起面板，避免跨页操作队列。
     if (batch.open) {
@@ -315,6 +334,7 @@ function saveBatchSettings(settings) {
     } catch (_) {
         // 持久化失败只影响下次启动的默认状态。
     }
+    FolderService.SetBatchSettings(settings.file, settings.folder).catch(showError);
 }
 
 function baseName(path) {
@@ -704,6 +724,38 @@ async function setWindowSize(size) {
     } catch (_) {
         // 窗口尺寸调整失败不影响功能。
     }
+}
+
+// 常规页按内容自然增高：只在真正溢出或明显富余时调整窗口，避免来回抖动。
+let lastGeneralHeight = SINGLE_SIZE.height;
+let generalResizeTimer = 0;
+
+async function resizeGeneralWindow() {
+    if (currentTab !== "tabGeneral" || batch.open) return;
+    const panel = el("tabGeneral");
+    const footer = document.querySelector(".bottom");
+    // 面板本身不再内部滚动，真正需要测量的是它是否越过底部提示所在的窗口边界。
+    const panelBottom = panel.getBoundingClientRect().bottom;
+    const footerHeight = footer ? footer.offsetHeight : 0;
+    const neededBottom = panelBottom + footerHeight + 8;
+    const delta = Math.ceil(neededBottom - window.innerHeight);
+    if (Math.abs(delta) <= 4) return;
+    const target = Math.max(SINGLE_SIZE.height, lastGeneralHeight + delta);
+    if (target === lastGeneralHeight) return;
+    lastGeneralHeight = target;
+    await setWindowSize({ width: SINGLE_SIZE.width, height: target });
+}
+
+function scheduleGeneralResize() {
+    if (currentTab !== "tabGeneral" || batch.open) return;
+    clearTimeout(generalResizeTimer);
+    generalResizeTimer = setTimeout(() => {
+        resizeGeneralWindow().catch(showError);
+    }, 80);
+}
+
+if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(scheduleGeneralResize).observe(el("tabGeneral"));
 }
 
 async function openBatch(kind) {
@@ -1223,8 +1275,14 @@ pinSaveBtn.addEventListener("click", async () => {
     }
 });
 
-langSelect.addEventListener("change", (event) => {
-    setLocale(event.target.value);
+langSelect.addEventListener("change", async (event) => {
+    const value = event.target.value;
+    setLocale(value);
+    try {
+        await FolderService.SetLanguage(value);
+    } catch (err) {
+        showError(err);
+    }
 });
 
 onLocaleChange(() => {
@@ -1248,6 +1306,128 @@ el("clearLogBtn").addEventListener("click", async () => {
     logBox.replaceChildren();
     try {
         await FolderService.ClearLogs();
+    } catch (err) {
+        showError(err);
+    }
+});
+
+openConfigBtn.addEventListener("click", async () => {
+    try {
+        await FolderService.OpenConfigFile();
+    } catch (err) {
+        showError(err);
+    }
+});
+
+openConfigFolderBtn.addEventListener("click", async () => {
+    try {
+        await FolderService.OpenConfigFolder();
+    } catch (err) {
+        showError(err);
+    }
+});
+
+changeConfigBtn.addEventListener("click", async () => {
+    let selected = "";
+    try {
+        selected = await Dialogs.OpenFile({
+            CanChooseFiles: false,
+            CanChooseDirectories: true,
+            AllowsMultipleSelection: false,
+            Title: t("tip.changeConfig"),
+        });
+    } catch (err) {
+        showError(err);
+        return;
+    }
+    if (typeof selected !== "string" || !selected) return;
+    try {
+        await FolderService.ChangeConfigPath(selected);
+        appendLog(t("log.configPathChanged"));
+    } catch (err) {
+        showError(err);
+    }
+});
+
+openLogFileBtn.addEventListener("click", async () => {
+    try {
+        await FolderService.OpenLogFile();
+    } catch (err) {
+        showError(err);
+    }
+});
+
+resetConfigBtn.addEventListener("click", async () => {
+    const yes = t("btn.yes");
+    let answer = "";
+    try {
+        answer = await Dialogs.Question({
+            Title: t("tip.resetConfigTitle"),
+            Message: t("tip.resetConfigMessage"),
+            Buttons: [
+                { Label: yes, IsDefault: true },
+                { Label: t("btn.cancel"), IsCancel: true },
+            ],
+        });
+    } catch (_) {
+        return;
+    }
+    if (answer !== yes) return;
+
+    try {
+        await FolderService.ResetConfig();
+        const info = await FolderService.GetConfigInfo();
+        setLocale(info.language);
+        langSelect.value = getLocale();
+        const level = ["off", "trace", "debug", "normal"].includes(info.logLevel) ? info.logLevel : "normal";
+        logLevelSelect.value = level;
+        previousLogLevel = level;
+        batchFileChk.checked = !!info.batchFile;
+        batchFolderChk.checked = !!info.batchFolder;
+        encPages.file.batch.classList.toggle("hidden", !info.batchFile);
+        encPages.folder.batch.classList.toggle("hidden", !info.batchFolder);
+        await applyPinTop(typeof info.alwaysOnTop === "boolean" ? info.alwaysOnTop : readPinTop());
+        const state = await FolderService.GetPinState();
+        applyPinState(state);
+        if (!state.Enabled || !state.SessionLocked) {
+            lockOverlay.classList.add("hidden");
+        }
+        appendLog(t("log.configReset"));
+        scheduleGeneralResize();
+    } catch (err) {
+        showError(err);
+    }
+});
+
+let previousLogLevel = "normal";
+
+logLevelSelect.addEventListener("change", async () => {
+    const value = logLevelSelect.value;
+    const wasOff = previousLogLevel === "off";
+    previousLogLevel = value;
+    try {
+        await FolderService.SetLogLevel(value);
+        appendLog(t("log.logLevelChanged", { level: t("logLevel." + value) }));
+    } catch (err) {
+        showError(err);
+    }
+    if (value !== "off" || wasOff) return;
+    let answer = "";
+    try {
+        answer = await Dialogs.Question({
+            Title: t("group.log"),
+            Message: t("log.offOpenFolder"),
+            Buttons: [
+                { Label: t("btn.yes"), IsDefault: true },
+                { Label: t("btn.no"), IsCancel: true },
+            ],
+        });
+    } catch (_) {
+        return;
+    }
+    if (answer !== t("btn.yes")) return;
+    try {
+        await FolderService.OpenLogFolder();
     } catch (err) {
         showError(err);
     }
@@ -1328,10 +1508,37 @@ batchListBtn.addEventListener("click", () => {
 });
 
 async function init() {
-    langSelect.value = getLocale();
+    let info = null;
+    try {
+        info = await FolderService.GetConfigInfo();
+    } catch (err) {
+        showError(err);
+    }
+    if (info && info.needsMigration) {
+        const legacy = readBatchSettings();
+        try {
+            await FolderService.MigrateLegacyConfig(getLocale(), readPinTop(), legacy.file, legacy.folder);
+            info = await FolderService.GetConfigInfo();
+        } catch (err) {
+            showError(err);
+        }
+    }
+    if (info) {
+        setLocale(info.language);
+        langSelect.value = getLocale();
+        const level = ["off", "trace", "debug", "normal"].includes(info.logLevel) ? info.logLevel : "normal";
+        logLevelSelect.value = level;
+        previousLogLevel = level;
+        batchFileChk.checked = !!info.batchFile;
+        batchFolderChk.checked = !!info.batchFolder;
+        encPages.file.batch.classList.toggle("hidden", !info.batchFile);
+        encPages.folder.batch.classList.toggle("hidden", !info.batchFolder);
+        await applyPinTop(typeof info.alwaysOnTop === "boolean" ? info.alwaysOnTop : readPinTop());
+    } else {
+        langSelect.value = getLocale();
+        await applyPinTop(readPinTop());
+    }
     refreshHint();
-    // 先恢复上次的置顶选择，再拉取其它状态。
-    await applyPinTop(readPinTop());
     await loadStartupState();
     try {
         const state = await FolderService.GetPinState();

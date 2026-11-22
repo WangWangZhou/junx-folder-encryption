@@ -254,7 +254,7 @@ func mustWrite(t *testing.T, path, content string) {
 // newTestService 构造已解锁、PIN 配置落在临时目录的服务实例。
 func newTestService(t *testing.T) *FolderService {
 	t.Helper()
-	store := newPinStore(filepath.Join(t.TempDir(), "pin.json"))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	return &FolderService{logs: []string{}, pins: store, unlocked: true}
 }
 

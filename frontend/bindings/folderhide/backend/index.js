@@ -8,6 +8,7 @@ export {
 };
 
 export {
+    ConfigInfo,
     DropFiles,
     JunxProgress,
     PathProbe,

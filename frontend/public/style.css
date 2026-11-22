@@ -1,5 +1,9 @@
 :root {
     --bg: #f0f0f0;
+    /* 一级/二级标签共用色：激活态与页面融合，未激活态 hover 略加深 */
+    --active-surface: #f9f9f9;
+    --tab-inactive: #f3f3f3;
+    --tab-hover: #ededed;
     --panel: #ffffff;
     --border: #b4b4b4;
     --line: #d4d4d4;
@@ -62,18 +66,22 @@ body {
     border: 1px solid transparent;
     border-bottom: none;
     border-radius: 0;
-    background: transparent;
+    background: var(--tab-inactive);
     color: var(--text);
     font: inherit;
     cursor: default;
 }
 
+.tab:not(.active):hover {
+    background: var(--tab-hover);
+}
+
 .tab.active {
     position: relative;
     top: 1px;
-    background: var(--bg);
+    background: var(--active-surface);
     border-color: var(--line);
-    border-bottom-color: var(--bg);
+    border-bottom-color: var(--active-surface);
 }
 
 /* 置顶按钮：停靠在一级标签栏右端，类似播放器的"总在最前"图钉 */
@@ -121,7 +129,7 @@ body {
     margin-left: -1px;
     border: 1px solid var(--line);
     border-radius: 0;
-    background: #e8e8e8;
+    background: var(--tab-inactive);
     color: var(--text);
     font: inherit;
     font-size: 12px;
@@ -132,10 +140,13 @@ body {
     margin-left: 0;
 }
 
+.subtab:not(.active):hover {
+    background: var(--tab-hover);
+}
+
 .subtab.active {
-    background: var(--bg);
-    border-bottom-color: var(--bg);
-    font-weight: 600;
+    background: var(--active-surface);
+    border-bottom-color: var(--active-surface);
 }
 
 .content {
@@ -145,6 +156,7 @@ body {
     gap: 6px;
     min-height: 0;
     padding: 6px 0 0;
+    background: var(--active-surface);
 }
 
 .panel {
@@ -958,15 +970,55 @@ select:focus {
     color: var(--placeholder);
 }
 
-/* 常规设置右上角的「清空日志」 */
+/* 常规页按内容自然增高，窗口高度由前端脚本同步拉长 */
+#tabGeneral {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+#tabGeneral .field-row > label[for] {
+    min-width: 5em;
+}
+
 .general-group {
     position: relative;
+}
+
+/* 常规页右下角的恢复默认按钮 */
+.general-reset-row {
+    justify-content: flex-end;
+    margin-top: 2px;
 }
 
 .group-corner {
     position: absolute;
     top: 3px;
     right: 6px;
+}
+
+.config-actions {
+    justify-content: flex-start;
+}
+
+.config-action-right {
+    display: inline-flex;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.log-level-select {
+    flex: 0 0 78px;
+    height: 23px;
+    padding: 0 2px;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: var(--panel);
+    color: var(--text);
+    font: inherit;
+}
+
+.log-setting-row .btn {
+    flex: 0 0 auto;
 }
 
 /* 批量设置：两个开关行更紧凑 */

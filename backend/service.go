@@ -1,7 +1,9 @@
 package backend
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,10 +16,13 @@ import (
 // FolderService 暴露给前端的文件夹隐藏服务。
 type FolderService struct {
 	mu         sync.Mutex
+	configMu   sync.Mutex
 	logs       []string
 	pins       *pinStore
+	config     *configStore
+	fileLog    *FileLogger
 	unlocked   bool
-	autoLock   bool      // 空闲自动锁定开关，与 pin.json 同步
+	autoLock   bool      // 空闲自动锁定开关，与 config.jsonc 同步
 	unlockedAt time.Time // 本次会话解锁成功的时间，用于 15 分钟计时
 }
 
@@ -27,11 +32,22 @@ func NewFolderService() *FolderService {
 	store, err := defaultPinStore()
 	if err != nil {
 		// 配置目录不可用时按未设置密码处理，避免启动失败。
-		service.pins = newPinStore(filepath.Join(os.TempDir(), pinFileName))
+		path := filepath.Join(os.TempDir(), configDirName, configFileName)
+		store = newPinStore(path)
+		service.pins = store
 		service.unlocked = true
+		service.config = store.config
+		service.fileLog = NewFileLogger(defaultLogDir(), "normal")
 		return service
 	}
 	service.pins = store
+	service.config = store.config
+	cfg, cfgErr := store.config.Load()
+	if cfgErr == nil {
+		service.fileLog = NewFileLogger(defaultLogDir(), cfg.LogLevel)
+	} else {
+		service.fileLog = NewFileLogger(defaultLogDir(), "normal")
+	}
 	record, configured, loadErr := store.Load()
 	service.unlocked = loadErr != nil || !configured
 	if loadErr == nil && configured {
@@ -352,8 +368,25 @@ func (s *FolderService) appendLog(level, message string) {
 	}
 	s.mu.Unlock()
 
+	if s.fileLog != nil {
+		s.fileLog.Log(slogLevelFor(level), message)
+	}
 	if app := application.Get(); app != nil {
 		app.Event.Emit("folder-log", entry)
+	}
+}
+
+// trace 只写文件日志，不打扰界面日志区。
+func (s *FolderService) trace(message string) {
+	if s.fileLog != nil {
+		s.fileLog.Log(slogLevelTrace, message)
+	}
+}
+
+// debug 只写文件日志，不打扰界面日志区。
+func (s *FolderService) debug(message string) {
+	if s.fileLog != nil {
+		s.fileLog.Log(slog.LevelDebug, message)
 	}
 }
 
@@ -493,6 +526,7 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 	if _, statErr := os.Stat(outPath); statErr == nil {
 		return s.fail(fmt.Errorf("目标文件已存在，请换一个输出名称: %s", outPath))
 	}
+	s.debug(fmt.Sprintf("加密准备: kind=%s src=%s out=%s", kind, absSrc, outPath))
 
 	emit := s.junxEmitter()
 	emit("scan", 0, filepath.Base(absSrc))
@@ -501,6 +535,7 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 		return s.fail(err)
 	}
 
+	s.debug(fmt.Sprintf("扫描完成: 文件=%d 目录=%d 跳过=%d", payload.files, payload.dirs, payload.skipped))
 	plain, err := packJunxPayload(payload.manifest, payload.body)
 	if err != nil {
 		return s.fail(err)
@@ -587,6 +622,7 @@ func (s *FolderService) decryptFromJunx(junxPath string) error {
 	if err != nil {
 		return s.fail(err)
 	}
+	s.debug(fmt.Sprintf("容器解析: kind=%s name=%s mark=%d", manifest.Kind, manifest.Name, mark))
 	// 标记只作提示：与清单不一致时以清单为准，并记录一次告警。
 	if mark != junxMarkUnknown && mark != markForKind(manifest.Kind) {
 		s.appendLog("WARN", "容器类型标记与内容不一致，已按清单还原")
@@ -684,6 +720,206 @@ func (s *FolderService) ClearLogs() {
 	s.mu.Lock()
 	s.logs = s.logs[:0]
 	s.mu.Unlock()
+}
+
+// GetConfigInfo 返回前端展示用的配置摘要。
+func (s *FolderService) GetConfigInfo() ConfigInfo {
+	cfg, err := s.config.Load()
+	if err != nil {
+		cfg = defaultAppConfig()
+	}
+	info := ConfigInfo{
+		Language:       cfg.Language,
+		AlwaysOnTop:    cfg.AlwaysOnTop,
+		BatchFile:      cfg.BatchFile,
+		BatchFolder:    cfg.BatchFolder,
+		LogLevel:       cfg.LogLevel,
+		ConfigPath:     s.config.path,
+		LogDir:         defaultLogDir(),
+		LogFilePath:    currentLogPath(),
+		NeedsMigration: !cfg.LegacyMigrated,
+	}
+	if s.fileLog != nil {
+		info.LogDir = s.fileLog.Dir()
+		info.LogFilePath = s.fileLog.CurrentPath()
+	}
+	return info
+}
+
+// MigrateLegacyConfig 把旧版 localStorage 偏好写入 config.jsonc。
+func (s *FolderService) MigrateLegacyConfig(language string, alwaysOnTop, batchFile, batchFolder bool) error {
+	return s.mutateConfig(func(cfg *AppConfig) {
+		cfg.Language = normalizeAppLanguage(language)
+		cfg.AlwaysOnTop = alwaysOnTop
+		cfg.BatchFile = batchFile
+		cfg.BatchFolder = batchFolder
+		cfg.LegacyMigrated = legacyConfigMigrated
+	})
+}
+
+func (s *FolderService) mutateConfig(mutate func(*AppConfig)) error {
+	if s.config == nil {
+		return fmt.Errorf("配置服务未初始化")
+	}
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	cfg, err := s.config.Load()
+	if err != nil {
+		return err
+	}
+	mutate(&cfg)
+	return s.config.Save(cfg)
+}
+
+// ResetConfig 把 config.jsonc 恢复为默认内容，并清除锁屏密码。
+// 配置文件路径本身保持不变；开机启动等注册表设置也不受影响。
+func (s *FolderService) ResetConfig() error {
+	if s.config == nil {
+		return fmt.Errorf("配置服务未初始化")
+	}
+	s.configMu.Lock()
+	cfg := defaultAppConfig()
+	cfg.LegacyMigrated = true
+	cfg.LegacyPinMigrated = true
+	if err := s.config.Save(cfg); err != nil {
+		s.configMu.Unlock()
+		return err
+	}
+	s.configMu.Unlock()
+
+	if s.fileLog != nil {
+		s.fileLog.SetLevel(cfg.LogLevel)
+	}
+	s.mu.Lock()
+	s.unlocked = true
+	s.autoLock = false
+	s.unlockedAt = time.Now()
+	s.mu.Unlock()
+	s.appendLog("INFO", "配置已恢复默认")
+	return nil
+}
+
+// SetLanguage 持久化显示语言。
+func (s *FolderService) SetLanguage(language string) error {
+	return s.mutateConfig(func(cfg *AppConfig) {
+		cfg.Language = normalizeAppLanguage(language)
+	})
+}
+
+// SetAlwaysOnTop 持久化窗口置顶状态；实际窗口状态由前端设置。
+func (s *FolderService) SetAlwaysOnTop(enabled bool) error {
+	return s.mutateConfig(func(cfg *AppConfig) {
+		cfg.AlwaysOnTop = enabled
+	})
+}
+
+// SetBatchSettings 持久化两个批量开关。
+func (s *FolderService) SetBatchSettings(file, folder bool) error {
+	return s.mutateConfig(func(cfg *AppConfig) {
+		cfg.BatchFile = file
+		cfg.BatchFolder = folder
+	})
+}
+
+// SetLogLevel 持久化日志级别，并立即应用到文件日志。
+func (s *FolderService) SetLogLevel(level string) error {
+	normalized := normalizeLogLevel(level)
+	if err := s.mutateConfig(func(cfg *AppConfig) {
+		cfg.LogLevel = normalized
+	}); err != nil {
+		return err
+	}
+	if s.fileLog != nil {
+		s.fileLog.SetLevel(normalized)
+	}
+	return nil
+}
+
+// ChangeConfigPath 把 config.jsonc 迁移到新目录，并更新注册表指针。
+func (s *FolderService) ChangeConfigPath(dir string) error {
+	if s.config == nil {
+		return fmt.Errorf("配置服务未初始化")
+	}
+	targetDir, err := filepath.Abs(strings.TrimSpace(dir))
+	if err != nil {
+		return err
+	}
+	if targetDir == "" {
+		return fmt.Errorf("请选择配置目录")
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return err
+	}
+	target := filepath.Join(targetDir, configFileName)
+	s.configMu.Lock()
+	defer s.configMu.Unlock()
+	old := s.config.path
+	if samePath(old, target) {
+		return nil
+	}
+	if _, err := os.Stat(target); err == nil {
+		return fmt.Errorf("目标位置已存在 %s", configFileName)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	cfg, err := s.config.Load()
+	if err != nil {
+		return err
+	}
+	if err := s.config.writeTo(target, cfg); err != nil {
+		return err
+	}
+	if err := writeConfigPath(target); err != nil {
+		_ = os.Remove(target)
+		return err
+	}
+	s.config.path = target
+	if s.pins != nil && s.pins.config != nil {
+		s.pins.config.path = target
+	}
+	_ = os.Remove(old)
+	return nil
+}
+
+// OpenConfigFile 用默认文本编辑器打开 config.jsonc。
+func (s *FolderService) OpenConfigFile() error {
+	if s.config == nil {
+		return fmt.Errorf("配置服务未初始化")
+	}
+	if _, err := os.Stat(s.config.path); errors.Is(err, os.ErrNotExist) {
+		if err := s.config.ensure(); err != nil {
+			return err
+		}
+	}
+	return openWithDefaultApp(s.config.path)
+}
+
+// OpenConfigFolder 在资源管理器中打开配置文件所在目录。
+func (s *FolderService) OpenConfigFolder() error {
+	if s.config == nil {
+		return fmt.Errorf("配置服务未初始化")
+	}
+	return openContainingFolder(s.config.path)
+}
+
+// OpenLogFile 用默认文本编辑器打开当天日志文件。
+func (s *FolderService) OpenLogFile() error {
+	if s.fileLog == nil {
+		return fmt.Errorf("日志服务未初始化")
+	}
+	if err := s.fileLog.EnsureCurrent(); err != nil {
+		return err
+	}
+	return openWithDefaultApp(s.fileLog.CurrentPath())
+}
+
+// OpenLogFolder 打开固定日志目录，供用户查看或手动删除。
+func (s *FolderService) OpenLogFolder() error {
+	dir := defaultLogDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	return openWithDefaultApp(dir)
 }
 
 // GetStartupState 返回开机启动与管理员运行设置。

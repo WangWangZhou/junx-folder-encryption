@@ -7,6 +7,93 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * ConfigInfo 是提供给前端展示的配置摘要，不包含 PIN 密文。
+ */
+export class ConfigInfo {
+    /**
+     * Creates a new ConfigInfo instance.
+     * @param {Partial<ConfigInfo>} [$$source = {}] - The source object to create the ConfigInfo.
+     */
+    constructor($$source = {}) {
+        if (!("language" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["language"] = "";
+        }
+        if (!("alwaysOnTop" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["alwaysOnTop"] = false;
+        }
+        if (!("batchFile" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["batchFile"] = false;
+        }
+        if (!("batchFolder" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["batchFolder"] = false;
+        }
+        if (!("logLevel" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["logLevel"] = "";
+        }
+        if (!("configPath" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["configPath"] = "";
+        }
+        if (!("logDir" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["logDir"] = "";
+        }
+        if (!("logFilePath" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["logFilePath"] = "";
+        }
+        if (!("needsMigration" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["needsMigration"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ConfigInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ConfigInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ConfigInfo(/** @type {Partial<ConfigInfo>} */($$parsedSource));
+    }
+}
+
+/**
  * DropFiles 是拖放事件载荷。Target 为带 data-file-drop-target 的元素 id。
  */
 export class DropFiles {

@@ -16,6 +16,15 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 /**
+ * ChangeConfigPath 把 config.jsonc 迁移到新目录，并更新注册表指针。
+ * @param {string} dir
+ * @returns {$CancellablePromise<void>}
+ */
+export function ChangeConfigPath(dir) {
+    return $Call.ByID(2061217546, dir);
+}
+
+/**
  * ClearLogs 清空内存日志。
  * @returns {$CancellablePromise<void>}
  */
@@ -121,13 +130,23 @@ export function EncryptFolderToJunx(path, outputName, deleteOriginal, locale) {
 }
 
 /**
+ * GetConfigInfo 返回前端展示用的配置摘要。
+ * @returns {$CancellablePromise<$models.ConfigInfo>}
+ */
+export function GetConfigInfo() {
+    return $Call.ByID(2396961623).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * GetPinState 返回打开密码状态，不返回密文或明文密码。
  * 同时惰性检查自动锁定，供前端定时轮询感知会话锁定状态。
  * @returns {$CancellablePromise<$models.PinState>}
  */
 export function GetPinState() {
     return $Call.ByID(1574496005).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
@@ -137,7 +156,7 @@ export function GetPinState() {
  */
 export function GetStartupState() {
     return $Call.ByID(134801147).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType3($result);
     }));
 }
 
@@ -152,6 +171,50 @@ export function Lock() {
 }
 
 /**
+ * MigrateLegacyConfig 把旧版 localStorage 偏好写入 config.jsonc。
+ * @param {string} language
+ * @param {boolean} alwaysOnTop
+ * @param {boolean} batchFile
+ * @param {boolean} batchFolder
+ * @returns {$CancellablePromise<void>}
+ */
+export function MigrateLegacyConfig(language, alwaysOnTop, batchFile, batchFolder) {
+    return $Call.ByID(3629838201, language, alwaysOnTop, batchFile, batchFolder);
+}
+
+/**
+ * OpenConfigFile 用默认文本编辑器打开 config.jsonc。
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenConfigFile() {
+    return $Call.ByID(265583599);
+}
+
+/**
+ * OpenConfigFolder 在资源管理器中打开配置文件所在目录。
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenConfigFolder() {
+    return $Call.ByID(3621353289);
+}
+
+/**
+ * OpenLogFile 用默认文本编辑器打开当天日志文件。
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenLogFile() {
+    return $Call.ByID(106327749);
+}
+
+/**
+ * OpenLogFolder 打开固定日志目录，供用户查看或手动删除。
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenLogFolder() {
+    return $Call.ByID(2727291631);
+}
+
+/**
  * ProbePaths 批量探测拖入的路径，不修改任何文件。
  * 与加密/解密接口不同，这里允许在未解锁状态下调用：它只读取名称与文件头。
  * @param {string[]} paths
@@ -159,7 +222,7 @@ export function Lock() {
  */
 export function ProbePaths(paths) {
     return $Call.ByID(3161538085, paths).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType5($result);
     }));
 }
 
@@ -169,8 +232,26 @@ export function ProbePaths(paths) {
  */
 export function RecentLogs() {
     return $Call.ByID(1632993871).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
+}
+
+/**
+ * ResetConfig 把 config.jsonc 恢复为默认内容，并清除锁屏密码。
+ * 配置文件路径本身保持不变；开机启动等注册表设置也不受影响。
+ * @returns {$CancellablePromise<void>}
+ */
+export function ResetConfig() {
+    return $Call.ByID(14051856);
+}
+
+/**
+ * SetAlwaysOnTop 持久化窗口置顶状态；实际窗口状态由前端设置。
+ * @param {boolean} enabled
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetAlwaysOnTop(enabled) {
+    return $Call.ByID(344924940, enabled);
 }
 
 /**
@@ -194,6 +275,34 @@ export function SetAutoLock(enabled, locale) {
  */
 export function SetAutoStart(enabled) {
     return $Call.ByID(496378846, enabled);
+}
+
+/**
+ * SetBatchSettings 持久化两个批量开关。
+ * @param {boolean} file
+ * @param {boolean} folder
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetBatchSettings(file, folder) {
+    return $Call.ByID(2793605326, file, folder);
+}
+
+/**
+ * SetLanguage 持久化显示语言。
+ * @param {string} language
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetLanguage(language) {
+    return $Call.ByID(1757122211, language);
+}
+
+/**
+ * SetLogLevel 持久化日志级别，并立即应用到文件日志。
+ * @param {string} level
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetLogLevel(level) {
+    return $Call.ByID(3029124769, level);
 }
 
 /**
@@ -226,8 +335,9 @@ export function Version() {
 
 // Private type creation functions
 const $$createType0 = $models.PinResult.createFrom;
-const $$createType1 = $models.PinState.createFrom;
-const $$createType2 = $models.StartupState.createFrom;
-const $$createType3 = $models.PathProbe.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = $Create.Array($Create.Any);
+const $$createType1 = $models.ConfigInfo.createFrom;
+const $$createType2 = $models.PinState.createFrom;
+const $$createType3 = $models.StartupState.createFrom;
+const $$createType4 = $models.PathProbe.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = $Create.Array($Create.Any);

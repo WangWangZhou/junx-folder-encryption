@@ -32,7 +32,7 @@ func TestPinValidationAndSeal(t *testing.T) {
 }
 
 func TestPinWindowLockoutAndExpiry(t *testing.T) {
-	store := newPinStore(filepath.Join(t.TempDir(), pinFileName))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	service := &FolderService{pins: store, logs: []string{}, unlocked: true}
 
 	if result := service.ConfigurePin("1234", 4, pinPolicyWin); !result.OK {
@@ -75,7 +75,7 @@ func TestPinWindowLockoutAndExpiry(t *testing.T) {
 }
 
 func TestPinUnlimitedNeverLocks(t *testing.T) {
-	store := newPinStore(filepath.Join(t.TempDir(), pinFileName))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	service := &FolderService{pins: store, logs: []string{}, unlocked: true}
 
 	if result := service.ConfigurePin("123456", 6, pinPolicyInf); !result.OK {
@@ -98,12 +98,12 @@ func TestPinUnlimitedNeverLocks(t *testing.T) {
 }
 
 func TestPinRecordHasNoPlaintext(t *testing.T) {
-	store := newPinStore(filepath.Join(t.TempDir(), pinFileName))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	service := &FolderService{pins: store, logs: []string{}, unlocked: true}
 	if result := service.ConfigurePin("001", 3, pinPolicyWin); !result.OK {
 		t.Fatalf("设置 PIN 失败: %+v", result)
 	}
-	data, err := os.ReadFile(store.path)
+	data, err := os.ReadFile(store.config.path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +117,7 @@ func TestPinRecordHasNoPlaintext(t *testing.T) {
 }
 
 func TestManualLockRequiresUnlockAgain(t *testing.T) {
-	store := newPinStore(filepath.Join(t.TempDir(), pinFileName))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	service := &FolderService{pins: store, logs: []string{}, unlocked: true}
 	if result := service.ConfigurePin("1234", 4, pinPolicyInf); !result.OK {
 		t.Fatalf("设置 PIN 失败: %+v", result)
@@ -136,7 +136,7 @@ func TestManualLockRequiresUnlockAgain(t *testing.T) {
 }
 
 func TestAutoLockAfterIdleAndPersistence(t *testing.T) {
-	store := newPinStore(filepath.Join(t.TempDir(), pinFileName))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	service := &FolderService{pins: store, logs: []string{}, unlocked: true}
 	if result := service.ConfigurePin("1234", 4, pinPolicyInf); !result.OK {
 		t.Fatalf("设置 PIN 失败: %+v", result)
@@ -172,7 +172,7 @@ func TestAutoLockAfterIdleAndPersistence(t *testing.T) {
 }
 
 func TestDisablePinClearsAutoLock(t *testing.T) {
-	store := newPinStore(filepath.Join(t.TempDir(), pinFileName))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	service := &FolderService{pins: store, logs: []string{}, unlocked: true}
 	if result := service.ConfigurePin("1234", 4, pinPolicyInf); !result.OK {
 		t.Fatalf("设置 PIN 失败: %+v", result)
@@ -189,7 +189,7 @@ func TestDisablePinClearsAutoLock(t *testing.T) {
 }
 
 func TestServiceRequiresUnlock(t *testing.T) {
-	store := newPinStore(filepath.Join(t.TempDir(), pinFileName))
+	store := newPinStore(filepath.Join(t.TempDir(), configFileName))
 	service := &FolderService{pins: store, logs: []string{}, unlocked: true}
 	if result := service.ConfigurePin("123", 3, pinPolicyWin); !result.OK {
 		t.Fatalf("设置 PIN 失败: %+v", result)

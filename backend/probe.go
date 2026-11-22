@@ -1,6 +1,7 @@
 package backend
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,7 +25,9 @@ type PathProbe struct {
 func (s *FolderService) ProbePaths(paths []string) []PathProbe {
 	probes := make([]PathProbe, 0, len(paths))
 	for _, path := range paths {
-		probes = append(probes, probePath(path))
+		probe := probePath(path)
+		s.trace(fmt.Sprintf("路径探测: %s -> kind=%s container=%s outputExists=%t", probe.Path, probe.Kind, probe.ContainerKind, probe.OutputExists))
+		probes = append(probes, probe)
 	}
 	return probes
 }

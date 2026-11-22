@@ -146,7 +146,6 @@
         <section class="panel" id="tabGeneral">
             <fieldset class="group general-group">
                 <legend data-i18n="group.general">常规设置</legend>
-                <button id="clearLogBtn" class="btn small group-corner" data-i18n="btn.clearLog" type="button">清空日志</button>
                 <div class="field-row">
                     <label for="langSelect" data-i18n="field.language">显示语言:</label>
                     <select id="langSelect" class="lang-select">
@@ -194,6 +193,34 @@
                     <button id="manualLockBtn" class="btn small" data-i18n="btn.manualLock" type="button">手动锁定</button>
                 </div>
             </fieldset>
+            <fieldset class="group config-group">
+                <legend data-i18n="group.config">配置管理</legend>
+                <div class="field-row">
+                    <label for="configPathInput" data-i18n="field.configPath">路径:</label>
+                    <input id="configPathInput" type="text" value="config.jsonc" readonly/>
+                </div>
+                <div class="field-row config-actions">
+                    <button id="openConfigFolderBtn" class="btn small" data-i18n="btn.openConfigFolder" data-i18n-title="tip.openConfigFolder" title="" type="button">打开所在文件夹</button>
+                    <span class="config-action-right">
+                        <button id="openConfigBtn" class="btn small" data-i18n="btn.openConfig" data-i18n-title="tip.openConfig" title="" type="button">打开</button>
+                        <button id="changeConfigBtn" class="btn small" data-i18n="btn.changeConfig" data-i18n-title="tip.changeConfig" title="" type="button">更改</button>
+                    </span>
+                </div>
+            </fieldset>
+            <fieldset class="group log-setting-group">
+                <legend data-i18n="group.log">日志管理</legend>
+                <div class="field-row log-setting-row">
+                    <label for="logLevelSelect" data-i18n="field.logLevel">日志级别:</label>
+                    <select id="logLevelSelect" class="log-level-select">
+                        <option value="off" data-i18n="logLevel.off">关</option>
+                        <option value="trace" data-i18n="logLevel.trace">追踪</option>
+                        <option value="debug" data-i18n="logLevel.debug">调试</option>
+                        <option value="normal" data-i18n="logLevel.normal">普通</option>
+                    </select>
+                    <button id="openLogFileBtn" class="btn small" data-i18n="btn.openLogFile" type="button">打开日志文件</button>
+                    <button id="clearLogBtn" class="btn small" data-i18n="btn.clearLog" data-i18n-title="tip.clearLog" title="" type="button">清空日志</button>
+                </div>
+            </fieldset>
             <fieldset class="group">
                 <legend data-i18n="group.batch">批量设置</legend>
                 <div class="field-row checkbox-row batch-setting-row">
@@ -209,6 +236,9 @@
                     </label>
                 </div>
             </fieldset>
+            <div class="field-row general-reset-row">
+                <button id="resetConfigBtn" class="btn small" data-i18n="btn.resetConfig" data-i18n-title="tip.resetConfig" title="" type="button">恢复默认</button>
+            </div>
         </section>
 
         <section class="panel about" id="tabAbout">
