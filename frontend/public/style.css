@@ -13,6 +13,8 @@
     --placeholder: #7a7a7a;
     /* 输入框禁用态底色，批量拖入区复用同一个值 */
     --input-disabled: #f7f7f7;
+    /* 日志区 1px 细边框，比通用分隔线更浅 */
+    --log-border: #ececec;
     font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
@@ -342,12 +344,12 @@ select:focus {
     min-height: 48px;
 }
 
-/* 日志区不再套 fieldset：去掉边框与标题，白色填充直接当文本终端用 */
+/* 日志区不再套 fieldset：去掉标题，白色填充当文本终端用，仅保留 1px 浅灰细边框 */
 .log {
     flex: 1;
     overflow: auto;
     padding: 2px 4px;
-    border: 0;
+    border: 1px solid var(--log-border);
     background: var(--panel);
     font-family: Consolas, "Courier New", monospace;
     font-size: 12px;
