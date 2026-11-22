@@ -10,6 +10,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"folderhide/backend"
+	"folderhide/internal/windowfront"
 )
 
 //go:embed all:frontend/dist
@@ -201,10 +202,10 @@ func main() {
 			pendingState.MonitorID = id
 			stateMu.Unlock()
 		}
-		// 用 bringWindowToFront 而非直接 Show().Focus()：单实例回调运行在
+		// 用 windowfront.BringToFront 而非直接 Show().Focus()：单实例回调运行在
 		// 后台 goroutine，缺少用户输入上下文，Windows 前台锁定会拒绝激活，
 		// 导致窗口只出现在任务栏而不弹到最前。该函数会先解除前台锁定。
-		bringWindowToFront(window)
+		windowfront.BringToFront(window)
 	}
 
 	// 拖动与缩放时更新内存状态并延时落盘。
