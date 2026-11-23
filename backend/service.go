@@ -64,7 +64,7 @@ func (s *FolderService) ServiceName() string {
 
 // Version 返回纯版本号，方案说明由前端按当前语言渲染。
 func (s *FolderService) Version() string {
-	return "1.0.0"
+	return "1.1.0"
 }
 
 // Quit 退出应用程序。托盘菜单与常规页的退出按钮共用此入口。

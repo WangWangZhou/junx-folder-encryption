@@ -134,7 +134,7 @@ func main() {
 	stateMu.Unlock()
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "文件夹隐藏工具 v1.0.0",
+		Title:            "文件夹隐藏工具 v1.1.0",
 		Width:            bounds.Width,
 		Height:           bounds.Height,
 		MinWidth:         backend.MinWindowWidth,
