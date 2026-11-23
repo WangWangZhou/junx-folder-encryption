@@ -4,7 +4,7 @@
 
 > 当前版本：`1.1.0`　|　平台：Windows 10 / 11（amd64）
 >
-> 完整文档：[产品文档站](https://junx-folder-encryption.workers.dev) · [下载发行版](https://gitee.com/wangwang2020/junx-folder-encryption/releases) · [开发文档](https://junx-folder-encryption.workers.dev/dev/project-structure/)
+> 完整文档：[产品文档站](https://junx-folder-encryption.workers.dev) · [下载发行版](https://github.com/WangWangZhou/junx-folder-encryption/releases) · [开发文档](https://junx-folder-encryption.workers.dev/dev/project-structure/)
 
 ---
 
@@ -117,9 +117,3 @@
 5. 不要在 OneDrive 等同步目录、系统目录或程序安装目录使用，操作前请自行备份。
 
 详细的技术边界、构建方式与测试覆盖见 [开发文档](https://junx-folder-encryption.workers.dev/dev/project-structure/)。
-
----
-
-## 5. 源码
-
-Gitee：<https://gitee.com/wangwang2020/junx-folder-encryption>

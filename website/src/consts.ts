@@ -5,7 +5,7 @@ export const SITE_TITLE = `文件夹隐藏工具 ${SITE_VERSION}`;
 export const SITE_DESCRIPTION =
 	"文件夹隐藏工具：文件夹隐藏、文件与文件夹 AES-256-GCM 加密、批量任务与锁屏密码，Windows 10 / 11 桌面应用。";
 
-export const REPO_URL = "https://gitee.com/wangwang2020/junx-folder-encryption";
+export const REPO_URL = "https://github.com/WangWangZhou/junx-folder-encryption";
 export const DOWNLOAD_URL = `${REPO_URL}/releases`;
 
 // 文档导航：分组与页面一一对应。

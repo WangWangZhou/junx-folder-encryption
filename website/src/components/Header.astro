@@ -1,6 +1,6 @@
 ---
 import HeaderLink from "./HeaderLink.astro";
-import { SITE_NAV, SITE_TITLE } from "../consts";
+import { REPO_URL, SITE_NAV, SITE_TITLE } from "../consts";
 ---
 
 <header>
@@ -11,7 +11,7 @@ import { SITE_NAV, SITE_TITLE } from "../consts";
 			{SITE_NAV.map((item) => <HeaderLink href={item.href}>{item.title}</HeaderLink>)}
 		</div>
 		<div class="nav-links">
-			<a href="https://gitee.com/wangwang2020/junx-folder-encryption" target="_blank" rel="noopener">源码仓库</a>
+			<a href={REPO_URL} target="_blank" rel="noopener">源码仓库</a>
 		</div>
 	</nav>
 </header>
