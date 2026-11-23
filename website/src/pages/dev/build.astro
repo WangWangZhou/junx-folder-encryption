@@ -1,0 +1,65 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+---
+
+<DocLayout
+	title="环境与构建"
+	description="开发环境版本要求、依赖、常用 Wails 命令，以及 website 与桌面端构建的隔离方式。"
+>
+	<h2>环境要求</h2>
+	<table>
+		<thead><tr><th>组件</th><th>版本</th></tr></thead>
+		<tbody>
+			<tr><td>Go</td><td>1.26 或更高</td></tr>
+			<tr><td>Wails CLI</td><td>v3.0.0</td></tr>
+			<tr><td>Node.js</td><td>22（已在 22.x 验证）</td></tr>
+			<tr><td>npm</td><td>随 Node.js</td></tr>
+			<tr><td>WebView2</td><td>Windows 10 / 11 系统自带</td></tr>
+		</tbody>
+	</table>
+	<p>
+		后端依赖 <code>github.com/wailsapp/wails/v3</code>、<code>golang.org/x/sys</code> 与 <code>github.com/tailscale/hujson</code>（JSONC 读写并保留注释）；前端依赖 <code>@wailsio/runtime</code> 与 <code>vite</code>。
+	</p>
+
+	<h2>常用命令</h2>
+	<pre><code>{`# 开发调试（热重载）
+wails3 dev
+
+# 生成 Go → 前端类型绑定（修改后端方法签名后必须执行）
+wails3 generate bindings -d frontend/bindings .
+
+# 构建前端产物到 frontend/dist
+cd frontend
+npm install
+npm run build
+cd ..
+
+# 打包为单文件 exe，输出到 bin/my-folder-encryption.exe
+wails3 build
+
+# 生成 NSIS 安装包，输出到 bin/my-folder-encryption-amd64-installer.exe
+wails3 package
+
+# 指定目标平台的完整发行构建
+wails3 package GOOS=windows
+
+# 后端检查与测试
+go vet ./...
+go test ./backend/`}</code></pre>
+
+	<h2>website 与桌面端的隔离</h2>
+	<ul>
+		<li><code>build/config.yml</code> 的 <code>dev_mode.ignore.dir</code> 包含 <code>website</code>，因此 <code>wails3 dev</code> 不会因文档站里的 <code>.js</code> / <code>.ts</code> 文件变化而触发重建。</li>
+		<li><code>website/</code> 有自己的 <code>package.json</code>，<code>wails3 build</code> / <code>package</code> 只构建 <code>frontend/</code>，两者互不干扰。</li>
+		<li>文档站构建与预览：</li>
+	</ul>
+	<pre><code>{`cd website
+npm install
+npm run build       # 输出到 website/dist
+npm run preview     # 本地预览`}</code></pre>
+
+	<h2>版本同步</h2>
+	<p class="note">
+		版本改动需要同步 <code>build/config.yml</code>、<code>main.go</code> 窗口标题、<code>backend/service.go</code> 的 <code>Version()</code>、前端三语字典与 <code>website/src/consts.ts</code>。改完配置后执行 <code>wails3 task common:update:build-assets</code> 重建安装包元数据，再运行 <code>wails3 package GOOS=windows</code>。
+	</p>
+</DocLayout>

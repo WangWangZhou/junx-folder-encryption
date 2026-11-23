@@ -28,6 +28,16 @@ export const NAV_GROUPS = [
 		],
 	},
 	{
+		title: "开发",
+		items: [
+			{ title: "项目结构", href: "/dev/project-structure/" },
+			{ title: "环境与构建", href: "/dev/build/" },
+			{ title: "核心实现", href: "/dev/internals/" },
+			{ title: "测试", href: "/dev/testing/" },
+			{ title: "安全边界", href: "/dev/limitations/" },
+		],
+	},
+	{
 		title: "更多",
 		items: [
 			{ title: "官网", href: "/more/official/" },
@@ -41,5 +51,6 @@ export const NAV_GROUPS = [
 export const SITE_NAV = [
 	{ title: "指南", href: "/guide/folder-hide/" },
 	{ title: "进阶", href: "/advanced/batch-encrypt/" },
+	{ title: "开发", href: "/dev/project-structure/" },
 	{ title: "更多", href: "/more/official/" },
 ] as const;

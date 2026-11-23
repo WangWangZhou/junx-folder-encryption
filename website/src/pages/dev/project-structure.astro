@@ -1,0 +1,67 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+---
+
+<DocLayout
+	title="项目结构"
+	description="Wails 3 桌面端、Go 后端与 website 文档站的目录划分，根目录只保留 main.go。"
+>
+	<p>
+		仓库由三个独立部分组成：Wails 桌面应用（根目录 + <code>backend/</code> + <code>frontend/</code>）、独立的 Astro 文档站 <code>website/</code>、平台构建资源 <code>build/</code>。三者各自有依赖清单，website 的改动不会触发桌面端重建。
+	</p>
+
+	<h2>目录树</h2>
+	<pre><code>{`.
+├── main.go                       # Wails 应用入口，注册服务、窗口、系统托盘与拖放事件（根目录唯一 Go 文件）
+├── go.mod / go.sum               # Go 模块依赖
+├── Taskfile.yml                  # Wails 任务编排
+├── backend/                      # Go 后端
+│   ├── service.go                # 暴露给前端的 FolderService、加解密流程与日志
+│   ├── config.go                 # config.jsonc 读写、注释保留、PIN 迁移、默认值
+│   ├── config_path_windows.go    # 注册表保存 / 读取配置文件路径
+│   ├── config_path_other.go      # 非 Windows 桩
+│   ├── filelog.go                # slog 文件日志：按天文件、7 天清理、自动重建
+│   ├── open_windows.go           # 用默认程序打开文件 / 文件夹
+│   ├── open_other.go
+│   ├── junx.go                   # .junx 容器：打包、AES-256-GCM 封装、解包、重名
+│   ├── probe.go                  # 批量任务添加前的只读探测
+│   ├── types.go                  # 路径规范化、名称校验、进度与拖放事件模型
+│   ├── winapi_windows.go         # 方案A：扩展路径重命名、隐藏属性、目录枚举
+│   ├── winapi_other.go
+│   ├── metadata.go               # AES-256-GCM 信封与 .DS_Store 编解码
+│   ├── metadata_windows.go       # 扩展路径下 .DS_Store 读写
+│   ├── metadata_other.go
+│   ├── scheme_d_windows.go       # 方案B：DACL 备份、拒绝 ACE、恢复
+│   ├── scheme_d_other.go
+│   ├── windowstate.go            # 窗口位置/大小持久化与多屏恢复校验
+│   ├── startup.go                # StartupState 模型
+│   ├── startup_windows.go        # 开机启动与管理员运行注册表读写
+│   ├── startup_other.go
+│   ├── pin.go                    # 锁屏密码：AES 信封、状态、持久化
+│   └── *_test.go                 # 后端测试
+├── internal/
+│   └── windowfront/              # 窗口前台激活（单实例唤醒时置前）
+│       ├── windowfront_windows.go  # Windows：模拟 ALT 键解除前台锁定
+│       └── windowfront_other.go    # 非 Windows 退化实现
+├── frontend/
+│   ├── index.html                # 五个一级标签、方案二级标签、加密页与批量面板
+│   ├── src/
+│   │   ├── main.js               # 事件绑定、服务调用、日志渲染、批量队列
+│   │   └── i18n.js               # 轻量 i18n 与三语字典
+│   ├── public/style.css          # 浅灰经典界面样式
+│   ├── bindings/                 # wails3 生成的类型绑定（勿手改）
+│   └── dist/                     # 前端构建产物
+├── website/                      # 独立的 Astro 文档站（Cloudflare Workers）
+│   ├── src/pages/                # 指南 / 进阶 / 开发 / 更多
+│   ├── src/consts.ts             # 版本、导航与链接的单一真源
+│   └── public/screenshots/       # 软件界面截图（4 张）
+└── build/                        # Wails 平台构建配置与安装脚本
+    └── trayicon.png              # 32×32 系统托盘图标，由 main.go 用 go:embed 嵌入`}</code></pre>
+
+	<h2>约定</h2>
+	<ul>
+		<li>根目录只放 <code>main.go</code> 一个 Go 文件；平台相关实现按子系统放进 <code>backend/</code> 或 <code>internal/</code>，用文件名后缀区分平台。</li>
+		<li><code>frontend/bindings/</code> 由 Wails 生成，修改后端方法签名后必须重新生成，不要手改。</li>
+		<li><code>bin/</code>、<code>frontend/dist/</code> 与 website 的 <code>node_modules/</code>、<code>dist/</code>、<code>.astro/</code>、<code>.wrangler/</code> 均已忽略，仓库不含构建产物。</li>
+	</ul>
+</DocLayout>
