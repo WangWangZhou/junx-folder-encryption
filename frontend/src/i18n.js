@@ -532,6 +532,9 @@ export function applyI18n(root = document) {
     root.querySelectorAll("[data-i18n-title]").forEach((node) => {
         node.title = t(node.dataset.i18nTitle);
     });
+    root.querySelectorAll("[data-i18n-aria-label]").forEach((node) => {
+        node.setAttribute("aria-label", t(node.dataset.i18nAriaLabel));
+    });
     document.title = t("app.title");
     if (document.documentElement) document.documentElement.lang = currentLocale;
 }

@@ -338,17 +338,47 @@ select:focus {
 }
 
 .log-group {
+    position: relative;
     flex: 1;
     display: flex;
     flex-direction: column;
     min-height: 48px;
 }
 
+/* 日志区右上角的微型清空按钮，与常规页按钮共用同一清空逻辑 */
+.log-clear-btn {
+    position: absolute;
+    top: 3px;
+    right: 4px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 2px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    background: var(--panel);
+    color: var(--placeholder);
+    cursor: pointer;
+}
+
+.log-clear-btn:hover {
+    border-color: var(--border);
+    color: var(--text);
+}
+
+.log-clear-btn:focus-visible {
+    outline: 1px solid var(--border);
+    outline-offset: 1px;
+}
+
 /* 日志区不再套 fieldset：去掉标题，白色填充当文本终端用，仅保留 1px 浅灰细边框 */
 .log {
     flex: 1;
     overflow: auto;
-    padding: 2px 4px;
+    padding: 2px 24px 2px 4px;
     border: 1px solid var(--log-border);
     background: var(--panel);
     font-family: Consolas, "Courier New", monospace;

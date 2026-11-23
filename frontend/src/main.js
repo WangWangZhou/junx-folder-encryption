@@ -1303,14 +1303,19 @@ onLocaleChange(() => {
     }
 });
 
-el("clearLogBtn").addEventListener("click", async () => {
+// 常规页按钮与日志区右上角微型按钮共用同一清空逻辑：
+// 只清界面日志与内存日志，不删除磁盘日志文件。
+async function clearLogs() {
     logBox.replaceChildren();
     try {
         await FolderService.ClearLogs();
     } catch (err) {
         showError(err);
     }
-});
+}
+
+el("clearLogBtn").addEventListener("click", clearLogs);
+el("clearLogMiniBtn").addEventListener("click", clearLogs);
 
 openConfigBtn.addEventListener("click", async () => {
     try {
