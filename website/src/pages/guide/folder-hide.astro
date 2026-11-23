@@ -1,0 +1,44 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+---
+
+<DocLayout
+	title="文件夹隐藏使用"
+	description="使用方案A（尾随点）或方案B（ACL 权限）让文件夹在资源管理器中无法打开，并可随时恢复。"
+>
+	<p>
+		「文件夹隐藏」只改变目录名或访问权限，不加密内容。适合阻止误打开和随手翻看，不适合对抗专业取证。
+	</p>
+
+	<h2>方案A：尾随点隐藏</h2>
+	<ol class="steps">
+		<li>打开「文件夹隐藏」标签页，保持「方案A」选中。</li>
+		<li>在「路径」中填入目标文件夹，例如 <code>D:\Private\我的文件夹</code>；也可直接把文件夹拖入窗口。</li>
+		<li>需要一并改名时在「改名」中填入新名称，留空则保持原名。</li>
+		<li>点击「加密」完成隐藏；点击「解密」去掉 <code>..</code> 后缀并清除隐藏属性。</li>
+	</ol>
+	<figure>
+		<img src="/screenshots/hide.png" alt="文件夹隐藏界面" width="620" height="500" />
+		<figcaption>文件夹隐藏主界面：方案A / 方案B 切换、路径、改名与操作按钮</figcaption>
+	</figure>
+	<p class="note">
+		方案A 在目录名末尾追加 <code>..</code> 并设置隐藏属性。任一步失败会自动回滚；若填写了改名，会先改名再隐藏。
+	</p>
+
+	<h2>方案B：ACL 权限限制</h2>
+	<ol class="steps">
+		<li>切换到「方案B」子标签，填入要隐藏的 NTFS 文件夹路径。</li>
+		<li>点击「加密」写入 <code>.DS_Store</code> 元数据并收紧目录访问权限。</li>
+		<li>点击「解密」读取元数据恢复原有 DACL，使资源管理器可再次打开。</li>
+	</ol>
+	<p class="note">
+		方案B 仅对 NTFS 有效。元数据写在文件夹内部，若 <code>.DS_Store</code> 损坏或丢失，将无法自动恢复权限。
+	</p>
+
+	<h2>注意事项</h2>
+	<ul>
+		<li>隐藏不是加密：7-Zip、WSL、带 <code>\\?\</code> 前缀的命令行仍可访问。</li>
+		<li>不要在 OneDrive 等同步目录、系统目录或程序安装目录使用。</li>
+		<li>操作前请自行备份重要数据。</li>
+	</ul>
+</DocLayout>

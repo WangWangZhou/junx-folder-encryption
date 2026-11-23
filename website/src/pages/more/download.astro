@@ -1,0 +1,44 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+import { DOWNLOAD_URL, REPO_URL, SITE_VERSION } from "../../consts";
+---
+
+<DocLayout
+	title="下载"
+	description="下载文件夹隐藏工具 v1.1.0 的单文件版与安装版，适用于 Windows 10 / 11 amd64。"
+>
+	<p>当前发行版本为 {SITE_VERSION}，仅提供 Windows amd64 构建。</p>
+
+	<h2>发行版</h2>
+	<table>
+		<thead>
+			<tr><th>文件</th><th>说明</th></tr>
+		</thead>
+		<tbody>
+			<tr>
+				<td><code>my-folder-encryption.exe</code></td>
+				<td>单文件版，解压即可运行，无需安装</td>
+			</tr>
+			<tr>
+				<td><code>my-folder-encryption-amd64-installer.exe</code></td>
+				<td>安装版，通过 NSIS 安装器安装到系统</td>
+			</tr>
+		</tbody>
+	</table>
+
+	<p>
+		<a href={DOWNLOAD_URL} target="_blank" rel="noopener">前往 Gitee Releases 下载</a>
+	</p>
+
+	<h2>运行要求</h2>
+	<ul>
+		<li>Windows 10 / 11，amd64 架构</li>
+		<li>WebView2 Runtime（Windows 11 内置；Windows 10 安装器会引导安装）</li>
+		<li>方案B（ACL 隐藏）需要 NTFS 文件系统</li>
+	</ul>
+
+	<h2>校验与反馈</h2>
+	<p>
+		下载后如遇到问题，可在 <a href={`${REPO_URL}/issues`} target="_blank" rel="noopener">Gitee Issues</a> 反馈，并附上系统版本、操作步骤与日志内容。日志文件路径可在「常规 → 日志管理」中查看。
+	</p>
+</DocLayout>

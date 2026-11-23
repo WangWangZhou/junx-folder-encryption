@@ -1,0 +1,42 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+---
+
+<DocLayout
+	title="文件夹加密使用"
+	description="把整个目录树打包为 .junx 容器，内部文件名与目录结构一并加密，解密时自动处理重名。"
+>
+	<p>
+		文件夹加密把整个目录树用 AES-256-GCM 打包成一个 <code>.junx</code> 容器，内部文件名与目录层级一并加密，不留明文路径。
+	</p>
+
+	<h2>加密文件夹</h2>
+	<ol class="steps">
+		<li>打开「文件夹加密」标签页。</li>
+		<li>在「源文件夹」中填入目录路径，或点击「浏览…」选择；也支持把文件夹直接拖入窗口。</li>
+		<li>「输出名称」留空时取源目录名并自动追加 <code>.junx</code>。</li>
+		<li>需要删除原目录时勾选「加密后删除原文件，不放入回收站」。</li>
+		<li>点击「开始加密」等待完成。</li>
+	</ol>
+	<figure>
+		<img src="/screenshots/folder-encrypt.png" alt="文件夹加密界面" width="620" height="500" />
+		<figcaption>文件夹加密界面：源文件夹、输出名称与加解密操作</figcaption>
+	</figure>
+
+	<h2>解密文件夹</h2>
+	<ol class="steps">
+		<li>在「源文件夹」中填入 <code>.junx</code> 容器路径，或把容器拖入窗口。</li>
+		<li>点击「开始解密」，按内部清单还原完整目录树。</li>
+		<li>重名目录自动追加 <code>(2)(3)</code>，不会覆盖已有内容。</li>
+	</ol>
+	<p class="note">
+		程序会为文件和文件夹容器写入不同标记；即使标记被篡改，也会按加密清单还原。容器在文件页与文件夹页都能被正确识别。
+	</p>
+
+	<h2>注意事项</h2>
+	<ul>
+		<li>空目录、中文名与带空格的名称均可正确往返。</li>
+		<li>加密时整个载荷在内存中封装，超大目录可能占用较多内存，建议单次不超过数百 MB。</li>
+		<li>加密后请验证容器可解密，再删除原始目录。</li>
+	</ul>
+</DocLayout>

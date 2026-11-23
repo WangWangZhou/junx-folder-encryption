@@ -1,0 +1,35 @@
+---
+import { SITE_VERSION, REPO_URL } from "../consts";
+const year = new Date().getFullYear();
+---
+
+<footer>
+	<p>文件夹隐藏工具 {SITE_VERSION} · 基于 Wails 3 + Go · 支持简体中文 / English / 日本語</p>
+	<p>
+		<a href={REPO_URL} target="_blank" rel="noopener">源码仓库</a>
+		<span aria-hidden="true"> · </span>
+		<a href={`${REPO_URL}/releases`} target="_blank" rel="noopener">下载发行版</a>
+		<span aria-hidden="true"> · </span>
+		<a href="/more/changelog/">更新日志</a>
+	</p>
+	<p>&copy; {year} Junxin. 保留所有权利。</p>
+</footer>
+
+<style>
+	footer {
+		padding: 2em 1em 3em;
+		background: linear-gradient(var(--gray-gradient)) no-repeat;
+		color: rgb(var(--gray));
+		text-align: center;
+	}
+	footer p {
+		margin: 0 0 0.6em;
+		font-size: 0.9em;
+	}
+	footer a {
+		color: rgb(var(--gray-dark));
+	}
+	footer a:hover {
+		color: var(--accent);
+	}
+</style>

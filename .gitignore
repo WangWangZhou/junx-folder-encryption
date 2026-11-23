@@ -2,6 +2,10 @@
 bin
 frontend/dist
 frontend/node_modules
+website/node_modules
+website/dist
+website/.astro
+website/.wrangler
 build/linux/appimage/build
 build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 # Mobile generated (per-machine; overlays hold absolute paths)

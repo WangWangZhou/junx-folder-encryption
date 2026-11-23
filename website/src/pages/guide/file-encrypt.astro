@@ -1,0 +1,39 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+---
+
+<DocLayout
+	title="文件加密使用"
+	description="把单个文件用 AES-256-GCM 打包为 .junx 容器，容器内的文件名同样被加密。"
+>
+	<p>
+		文件加密把目标文件封装成 <code>.junx</code> 容器，内容使用 AES-256-GCM 加密，内部文件名与元数据一并加密。解密固定输出到 <code>.junx</code> 所在目录。
+	</p>
+
+	<h2>加密单个文件</h2>
+	<ol class="steps">
+		<li>打开「文件加密」标签页。</li>
+		<li>在「目标文件」中填入文件路径，或点击「浏览…」选择；也支持把文件直接拖入窗口。</li>
+		<li>「输出名称」留空时取源文件名并自动追加 <code>.junx</code>；也可自定义名称。</li>
+		<li>如需删除原文件，勾选「加密后删除原文件，不放入回收站」——此操作不可恢复。</li>
+		<li>点击「开始加密」，进度条显示当前阶段与百分比。</li>
+	</ol>
+	<figure>
+		<img src="/screenshots/file-encrypt.png" alt="文件加密界面" width="620" height="500" />
+		<figcaption>文件加密界面：目标文件、输出名称、删除原文件选项与加解密按钮</figcaption>
+	</figure>
+
+	<h2>解密文件</h2>
+	<ol class="steps">
+		<li>在「目标文件」中填入 <code>.junx</code> 文件路径，或把容器拖入窗口。</li>
+		<li>点击「开始解密」，在原目录还原文件。</li>
+		<li>若同名文件已存在，会自动追加 <code>(2)</code>、<code>(3)</code>，绝不覆盖。</li>
+	</ol>
+
+	<h2>注意事项</h2>
+	<ul>
+		<li>密钥内置在程序中，拿到程序的人都能离线解密；适合防误看，不适合对抗专业取证。</li>
+		<li>加密过程会把整个载荷放在内存中封装，超大文件建议分批或控制体积。</li>
+		<li>没有密码找回机制，请妥善保管容器文件。</li>
+	</ul>
+</DocLayout>

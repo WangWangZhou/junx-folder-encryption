@@ -1,0 +1,37 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+import { REPO_URL } from "../../consts";
+---
+
+<DocLayout
+	title="帮助翻译"
+	description="界面文案集中在 frontend/src/i18n.js，通过三个语言字典维护简体中文、English 与日本語。"
+>
+	<p>界面文案采用单一真源，全部集中在 <code>frontend/src/i18n.js</code> 的三个语言字典中。欢迎补充或校正翻译。</p>
+
+	<h2>翻译范围</h2>
+	<ul>
+		<li>简体中文（默认）</li>
+		<li>English</li>
+		<li>日本語</li>
+	</ul>
+
+	<h2>如何修改</h2>
+	<ol class="steps">
+		<li>在仓库中打开 <code>frontend/src/i18n.js</code>。</li>
+		<li>找到对应语言的字典，按 key 修改文案；保持 key 不变，只改 value。</li>
+		<li>涉及 HTML 的文案支持 <code>&lt;b&gt;</code>、<code>&lt;code&gt;</code> 等标签，注意保留闭合标签。</li>
+		<li>本地用 <code>npm run dev</code> 验证三种语言切换，再提交 Pull Request。</li>
+	</ol>
+
+	<h2>注意事项</h2>
+	<ul>
+		<li>新增 key 时三种语言都必须补齐，否则界面会回退显示 key 本身。</li>
+		<li>版本号等公共文案写在 <code>website/src/consts.ts</code>，不需要逐语言翻译。</li>
+		<li>系统托盘菜单的文案在 Go 侧随显示语言切换，新增菜单项时需同步翻译。</li>
+	</ul>
+
+	<p>
+		仓库地址：<a href={REPO_URL} target="_blank" rel="noopener">{REPO_URL}</a>
+	</p>
+</DocLayout>
