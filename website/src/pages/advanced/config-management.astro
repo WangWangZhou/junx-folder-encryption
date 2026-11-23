@@ -1,0 +1,51 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+---
+
+<DocLayout
+	title="配置管理"
+	description="查看与迁移 config.jsonc，了解默认配置项、恢复默认行为，以及独立的窗口状态文件。"
+>
+	<p>
+		应用的所有用户偏好保存在带注释的 JSONC 配置文件中，默认位于
+		<code>%AppData%\FolderHideTool\config.jsonc</code>。常规页的「配置管理」提供查看与迁移入口，一般无需手动编辑。
+	</p>
+
+	<h2>界面操作</h2>
+	<ul>
+		<li>路径输入框为只读，只显示文件名 <code>config.jsonc</code>，不暴露完整绝对路径。</li>
+		<li>「打开」调用系统默认文本编辑器打开配置文件。</li>
+		<li>「打开所在文件夹」在资源管理器中定位配置文件所在目录。</li>
+		<li>「更改」选择新目录后迁移配置文件，并把完整路径写入注册表，下次启动按新路径读取。</li>
+	</ul>
+	<figure>
+		<img src="/screenshots/general.png" alt="常规设置中的配置管理与日志管理" width="620" height="500" />
+		<figcaption>常规设置：配置管理与日志管理位于同一分组</figcaption>
+	</figure>
+
+	<h2>主要配置项</h2>
+	<table>
+		<thead>
+			<tr><th>字段</th><th>可选值</th><th>说明</th></tr>
+		</thead>
+		<tbody>
+			<tr><td><code>language</code></td><td><code>zh-CN</code> / <code>en</code> / <code>ja</code></td><td>显示语言，首次启动按系统语言自动选择</td></tr>
+			<tr><td><code>alwaysOnTop</code></td><td><code>true</code> / <code>false</code></td><td>窗口是否总在最前</td></tr>
+			<tr><td><code>batchFile</code> / <code>batchFolder</code></td><td><code>true</code> / <code>false</code></td><td>是否启用对应的批量任务支持</td></tr>
+			<tr><td><code>logLevel</code></td><td><code>off</code> / <code>trace</code> / <code>debug</code> / <code>normal</code></td><td>文件日志级别，默认 <code>normal</code></td></tr>
+			<tr><td><code>pin</code></td><td>对象或 <code>null</code></td><td>锁屏密码状态，只保存密文；<code>null</code> 表示未设置</td></tr>
+		</tbody>
+	</table>
+
+	<h2>恢复默认</h2>
+	<p>
+		常规页右下角「恢复默认」按钮会把 <code>config.jsonc</code> 重置为默认值并清除锁屏密码，但<strong>保留配置文件路径与注册表启动项</strong>。
+		若忘记锁屏密码，也可手动把配置中的 <code>pin</code> 改为 <code>null</code> 或删除整个 <code>pin</code> 对象，保存后重启即可。
+	</p>
+
+	<h2>窗口状态文件</h2>
+	<p class="note">
+		窗口位置与大小保存在独立的 <code>%AppData%\FolderHideTool\window-state.json</code>，与 <code>config.jsonc</code> 分离。
+		修改配置文件路径不会迁移它，「恢复默认」也不会重置它；删除该文件后重启，窗口恢复默认尺寸并居中。
+	</p>
+</DocLayout>

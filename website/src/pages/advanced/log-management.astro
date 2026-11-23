@@ -1,0 +1,47 @@
+---
+import DocLayout from "../../layouts/DocLayout.astro";
+---
+
+<DocLayout
+	title="日志管理"
+	description="设置文件日志级别，查看与清空界面日志，定位按天保存的日志文件。"
+>
+	<p>
+		日志分两处呈现：界面底部的日志区显示即时操作反馈，磁盘上的日志文件按天归档，便于事后排查。常规页的「日志管理」负责级别切换与文件入口。
+	</p>
+
+	<h2>日志级别</h2>
+	<table>
+		<thead>
+			<tr><th>界面选项</th><th>配置值</th><th>说明</th></tr>
+		</thead>
+		<tbody>
+			<tr><td>关</td><td><code>off</code></td><td>不写文件日志，界面日志仍正常显示</td></tr>
+			<tr><td>追踪</td><td><code>trace</code></td><td>记录路径探测、容器标记读取等细节</td></tr>
+			<tr><td>调试</td><td><code>debug</code></td><td>记录加解密流程、输出路径、扫描数量</td></tr>
+			<tr><td>普通</td><td><code>normal</code></td><td>默认级别，记录操作结果与警告 / 错误</td></tr>
+		</tbody>
+	</table>
+	<figure>
+		<img src="/screenshots/hide.png" alt="隐藏面板底部的界面日志区" width="620" height="500" />
+		<figcaption>隐藏面板底部的日志区：普通日志黑色、警告橙色、错误红色</figcaption>
+	</figure>
+
+	<h2>查看与清空</h2>
+	<ul>
+		<li>「打开日志文件」用系统默认程序打开当天的日志文件。</li>
+		<li>「清空日志」只清空界面日志与内存日志，<strong>不会删除磁盘上的 <code>.log</code> 文件</strong>；历史文件可在日志文件夹中手动删除。</li>
+		<li>切换到「关」时会询问是否打开日志文件夹，方便查看或清理历史日志。</li>
+	</ul>
+
+	<h2>文件存放规则</h2>
+	<ul>
+		<li>按天写入 <code>%AppData%\FolderHideTool\logs\app-YYYY-MM-DD.log</code>。</li>
+		<li>日志目录固定，界面中不可更改。</li>
+		<li>自动清理 7 天前的日志文件；若当天文件被手动删除，下一次写入会自动重建。</li>
+	</ul>
+
+	<p class="note">
+		常规提示与错误只写入日志区，不会频繁弹窗；仅「永久删除原文件」「自动锁定」「恢复默认」「日志级别切到关」等少数场景会弹出原生对话框。
+	</p>
+</DocLayout>

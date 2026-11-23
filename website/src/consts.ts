@@ -23,6 +23,8 @@ export const NAV_GROUPS = [
 		items: [
 			{ title: "批量加密", href: "/advanced/batch-encrypt/" },
 			{ title: "锁屏密码", href: "/advanced/lock-screen/" },
+			{ title: "配置管理", href: "/advanced/config-management/" },
+			{ title: "日志管理", href: "/advanced/log-management/" },
 		],
 	},
 	{
