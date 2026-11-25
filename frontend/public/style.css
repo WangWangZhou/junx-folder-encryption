@@ -1002,10 +1002,21 @@ select:focus {
     color: var(--placeholder);
 }
 
-/* 常规页按内容自然增高，窗口高度由前端脚本同步拉长 */
-#tabGeneral {
+/* 常规页与其他页按内容自然增高，窗口高度由前端脚本同步拉长 */
+#tabGeneral,
+#tabOther {
     flex: 0 0 auto;
     overflow: visible;
+}
+
+#tabOther .tweak-row {
+    justify-content: flex-start;
+    margin-top: 6px;
+}
+
+#tabOther .tweak-row .btn {
+    width: 100%;
+    text-align: center;
 }
 
 #tabGeneral .field-row > label[for] {

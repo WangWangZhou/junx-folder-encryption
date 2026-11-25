@@ -31,9 +31,10 @@
 
     <div class="app-main">
     <div class="tabs" role="tablist">
-        <button class="tab active" data-tab="tabHide" data-i18n="tab.hide" type="button">文件夹隐藏</button>
-        <button class="tab" data-tab="tabFileEnc" data-i18n="tab.fileEnc" type="button">文件加密</button>
+        <button class="tab active" data-tab="tabHide" data-i18n="tab.hide" type="button">隐藏</button>
+        <button class="tab" data-tab="tabFileEnc" data-i18n="tab.fileEnc" type="button">加密</button>
         <button class="tab" data-tab="tabFolderEnc" data-i18n="tab.folderEnc" type="button">文件夹加密</button>
+        <button class="tab" data-tab="tabOther" data-i18n="tab.other" type="button">其他</button>
         <button class="tab" data-tab="tabGeneral" data-i18n="tab.general" type="button">常规</button>
         <button class="tab" data-tab="tabAbout" data-i18n="tab.about" type="button">关于</button>
         <button id="pinTopBtn" class="pin-btn" type="button" aria-pressed="true" data-i18n-title="tip.alwaysOnTop" title="">
@@ -52,7 +53,7 @@
 
             <section class="subpanel active" id="subA">
                 <fieldset class="group">
-                    <legend data-i18n="group.folder">文件夹加密</legend>
+                    <legend data-i18n="group.folder">文件夹隐藏</legend>
                     <div class="field-row">
                         <label for="targetPathA" data-i18n="field.targetPath">路径</label>
                         <input id="targetPathA" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
@@ -70,7 +71,7 @@
 
             <section class="subpanel" id="subB">
                 <fieldset class="group">
-                    <legend data-i18n="group.acl">文件夹加密</legend>
+                    <legend data-i18n="group.acl">文件夹隐藏</legend>
                     <div class="field-row">
                         <label for="targetPathD" data-i18n="field.targetPath">路径</label>
                         <input id="targetPathD" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.path" autocomplete="off"/>
@@ -141,6 +142,27 @@
                 <button id="folderEncStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
                 <button id="folderEncDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
             </div>
+        </section>
+
+        <section class="panel" id="tabOther">
+            <fieldset class="group general-group">
+                <legend data-i18n="group.winTweaks">Windows 优化</legend>
+                <div class="field-row tweak-row">
+                    <button id="clearRecentBtn" class="btn small" data-i18n="btn.clearRecent" type="button">清除最近使用的文件记录</button>
+                </div>
+                <div class="field-row tweak-row">
+                    <button id="showDesktopIconsBtn" class="btn small" data-i18n="btn.showDesktopIcons" data-i18n-title="tip.showDesktopIcons" title="" type="button">显示此电脑</button>
+                </div>
+                <div class="field-row tweak-row">
+                    <button id="alignStartLeftBtn" class="btn small" data-i18n="btn.alignStartLeft" type="button">开始菜单左对齐</button>
+                </div>
+                <div class="field-row tweak-row">
+                    <button id="showHiddenFilesBtn" class="btn small" data-i18n="btn.showHiddenFiles" data-i18n-title="tip.showHiddenFiles" title="" type="button">显示隐藏文件</button>
+                </div>
+                <div class="field-row tweak-row">
+                    <button id="removeShortcutArrowBtn" class="btn small" data-i18n="btn.removeShortcutArrow" type="button">去掉桌面快捷方式的小箭头</button>
+                </div>
+            </fieldset>
         </section>
 
         <section class="panel" id="tabGeneral">
@@ -257,7 +279,11 @@
         <div class="log-group" id="logGroup">
             <button id="clearLogMiniBtn" class="log-clear-btn" data-i18n-title="tip.clearLog" data-i18n-aria-label="btn.clearLog" title="" aria-label="清空日志" type="button">
                 <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
-                    <path d="M3 4.5h10M6 4.5V3h4v1.5M4.5 4.5l.6 8h5.8l.6-8M6.7 6.5v4M9.3 6.5v4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                    <g transform="rotate(35 8 8)" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 2.2V8" />
+                        <path d="M5.6 8h4.8l-1 5.2H6.6z" />
+                        <path d="M7.1 9.7v3.1M8.9 9.7v3.1" />
+                    </g>
                 </svg>
             </button>
             <div class="log" id="logBox"></div>

@@ -16,6 +16,14 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 /**
+ * AlignTaskbarLeft 将 Win11 任务栏与开始按钮左对齐。
+ * @returns {$CancellablePromise<void>}
+ */
+export function AlignTaskbarLeft() {
+    return $Call.ByID(1751368515);
+}
+
+/**
  * ChangeConfigPath 把 config.jsonc 迁移到新目录，并更新注册表指针。
  * @param {string} dir
  * @returns {$CancellablePromise<void>}
@@ -30,6 +38,14 @@ export function ChangeConfigPath(dir) {
  */
 export function ClearLogs() {
     return $Call.ByID(1624376043);
+}
+
+/**
+ * ClearRecentFiles 清除当前用户的最近文件记录，不删除原文件。
+ * @returns {$CancellablePromise<void>}
+ */
+export function ClearRecentFiles() {
+    return $Call.ByID(1656358954);
 }
 
 /**
@@ -245,6 +261,14 @@ export function RecentLogs() {
 }
 
 /**
+ * RemoveShortcutArrow 去掉桌面快捷方式小箭头，需要管理员权限。
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveShortcutArrow() {
+    return $Call.ByID(1719021042);
+}
+
+/**
  * ResetConfig 把 config.jsonc 恢复为默认内容，并清除锁屏密码。
  * 配置文件路径本身保持不变；开机启动等注册表设置也不受影响。
  * @returns {$CancellablePromise<void>}
@@ -320,6 +344,22 @@ export function SetLogLevel(level) {
  */
 export function SetRunAsAdmin(enabled) {
     return $Call.ByID(1976180717, enabled);
+}
+
+/**
+ * ShowDesktopIcons 在桌面显示此电脑、控制面板、网络、用户文件与回收站。
+ * @returns {$CancellablePromise<void>}
+ */
+export function ShowDesktopIcons() {
+    return $Call.ByID(2705372252);
+}
+
+/**
+ * ShowHiddenFiles 显示隐藏文件与扩展名，但不显示受保护的系统文件。
+ * @returns {$CancellablePromise<void>}
+ */
+export function ShowHiddenFiles() {
+    return $Call.ByID(1655770037);
 }
 
 /**

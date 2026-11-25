@@ -32,6 +32,11 @@ const logLevelSelect = el("logLevelSelect");
 const openLogFileBtn = el("openLogFileBtn");
 const resetConfigBtn = el("resetConfigBtn");
 const quitBtn = el("quitBtn");
+const clearRecentBtn = el("clearRecentBtn");
+const showDesktopIconsBtn = el("showDesktopIconsBtn");
+const alignStartLeftBtn = el("alignStartLeftBtn");
+const showHiddenFilesBtn = el("showHiddenFilesBtn");
+const removeShortcutArrowBtn = el("removeShortcutArrowBtn");
 
 // 打开密码固定为 4 位、无限次尝试。
 const PIN_LENGTH = 4;
@@ -41,9 +46,13 @@ const hintKeyByTab = {
     tabHide: "hint.hide",
     tabFileEnc: "hint.fileEnc",
     tabFolderEnc: "hint.folderEnc",
+    tabOther: "hint.other",
     tabGeneral: "hint.general",
     tabAbout: "hint.about",
 };
+
+// 这两页内容较高：切到它们时隐藏日志区，并按内容调整窗口高度。
+const TALL_TAB_IDS = new Set(["tabGeneral", "tabOther"]);
 
 let currentTab = "tabHide";
 let pinState = { Enabled: false, Length: 4, Policy: "unlimited", Locked: false, RemainingSeconds: 0, AttemptsLeft: -1, AutoLock: false, SessionLocked: false };
@@ -168,13 +177,13 @@ function switchTab(tabId) {
     });
     currentTab = tabId;
     refreshHint();
-    logGroup.classList.toggle("hidden", tabId === "tabAbout" || tabId === "tabGeneral");
+    logGroup.classList.toggle("hidden", tabId === "tabAbout" || TALL_TAB_IDS.has(tabId));
 
-    if (tabId === "tabGeneral" && !batch.open) {
+    if (TALL_TAB_IDS.has(tabId) && !batch.open) {
         // 面板显示后再测量：ResizeObserver 此时通常不会触发，必须主动拉长窗口。
-        requestAnimationFrame(() => requestAnimationFrame(scheduleGeneralResize));
-    } else if (!batch.open && lastGeneralHeight !== SINGLE_SIZE.height) {
-        lastGeneralHeight = SINGLE_SIZE.height;
+        requestAnimationFrame(() => requestAnimationFrame(schedulePanelResize));
+    } else if (!batch.open && lastPanelHeight !== SINGLE_SIZE.height) {
+        lastPanelHeight = SINGLE_SIZE.height;
         setWindowSize(SINGLE_SIZE).catch(showError);
     }
 
@@ -727,13 +736,13 @@ async function setWindowSize(size) {
     }
 }
 
-// 常规页按内容自然增高：只在真正溢出或明显富余时调整窗口，避免来回抖动。
-let lastGeneralHeight = SINGLE_SIZE.height;
-let generalResizeTimer = 0;
+// 内容较高的页面按内容自然增高：只在真正溢出或明显富余时调整窗口，避免来回抖动。
+let lastPanelHeight = SINGLE_SIZE.height;
+let panelResizeTimer = 0;
 
-async function resizeGeneralWindow() {
-    if (currentTab !== "tabGeneral" || batch.open) return;
-    const panel = el("tabGeneral");
+async function resizePanelWindow() {
+    if (!TALL_TAB_IDS.has(currentTab) || batch.open) return;
+    const panel = el(currentTab);
     const footer = document.querySelector(".bottom");
     // 面板本身不再内部滚动，真正需要测量的是它是否越过底部提示所在的窗口边界。
     const panelBottom = panel.getBoundingClientRect().bottom;
@@ -741,22 +750,25 @@ async function resizeGeneralWindow() {
     const neededBottom = panelBottom + footerHeight + 8;
     const delta = Math.ceil(neededBottom - window.innerHeight);
     if (Math.abs(delta) <= 4) return;
-    const target = Math.max(SINGLE_SIZE.height, lastGeneralHeight + delta);
-    if (target === lastGeneralHeight) return;
-    lastGeneralHeight = target;
+    const target = Math.max(SINGLE_SIZE.height, lastPanelHeight + delta);
+    if (target === lastPanelHeight) return;
+    lastPanelHeight = target;
     await setWindowSize({ width: SINGLE_SIZE.width, height: target });
 }
 
-function scheduleGeneralResize() {
-    if (currentTab !== "tabGeneral" || batch.open) return;
-    clearTimeout(generalResizeTimer);
-    generalResizeTimer = setTimeout(() => {
-        resizeGeneralWindow().catch(showError);
+function schedulePanelResize() {
+    if (!TALL_TAB_IDS.has(currentTab) || batch.open) return;
+    clearTimeout(panelResizeTimer);
+    panelResizeTimer = setTimeout(() => {
+        resizePanelWindow().catch(showError);
     }, 80);
 }
 
 if (typeof ResizeObserver !== "undefined") {
-    new ResizeObserver(scheduleGeneralResize).observe(el("tabGeneral"));
+    TALL_TAB_IDS.forEach((id) => {
+        const panel = el(id);
+        if (panel) new ResizeObserver(schedulePanelResize).observe(panel);
+    });
 }
 
 async function openBatch(kind) {
@@ -1317,6 +1329,42 @@ async function clearLogs() {
 el("clearLogBtn").addEventListener("click", clearLogs);
 el("clearLogMiniBtn").addEventListener("click", clearLogs);
 
+// Windows 优化会重启资源管理器，先统一确认再调用后端。
+async function runTweak(invoke) {
+    const yes = t("btn.yes");
+    let answer = "";
+    try {
+        answer = await Dialogs.Question({
+            Title: t("tip.restartExplorerTitle"),
+            Message: t("tip.restartExplorer"),
+            Buttons: [
+                { Label: yes, IsDefault: true },
+                { Label: t("btn.cancel"), IsCancel: true },
+            ],
+        });
+    } catch (_) {
+        return;
+    }
+    if (answer !== yes) return;
+
+    try {
+        await invoke();
+    } catch (err) {
+        const message = err && err.message ? err.message : String(err);
+        if (message.includes("管理员")) {
+            showError(t("err.needAdmin"));
+        } else {
+            showError(err);
+        }
+    }
+}
+
+clearRecentBtn.addEventListener("click", () => runTweak(FolderService.ClearRecentFiles));
+showDesktopIconsBtn.addEventListener("click", () => runTweak(FolderService.ShowDesktopIcons));
+alignStartLeftBtn.addEventListener("click", () => runTweak(FolderService.AlignTaskbarLeft));
+showHiddenFilesBtn.addEventListener("click", () => runTweak(FolderService.ShowHiddenFiles));
+removeShortcutArrowBtn.addEventListener("click", () => runTweak(FolderService.RemoveShortcutArrow));
+
 openConfigBtn.addEventListener("click", async () => {
     try {
         await FolderService.OpenConfigFile();
@@ -1403,7 +1451,7 @@ resetConfigBtn.addEventListener("click", async () => {
             lockOverlay.classList.add("hidden");
         }
         appendLog(t("log.configReset"));
-        scheduleGeneralResize();
+        schedulePanelResize();
     } catch (err) {
         showError(err);
     }

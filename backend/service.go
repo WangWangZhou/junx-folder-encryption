@@ -953,6 +953,51 @@ func (s *FolderService) SetRunAsAdmin(enabled bool) error {
 	return writeRunAsAdmin(enabled)
 }
 
+// ClearRecentFiles 清除当前用户的最近文件记录，不删除原文件。
+func (s *FolderService) ClearRecentFiles() error {
+	if err := clearRecentFiles(); err != nil {
+		return s.fail(err)
+	}
+	s.appendLog("INFO", "已清除最近使用的文件记录")
+	return nil
+}
+
+// ShowDesktopIcons 在桌面显示此电脑、控制面板、网络、用户文件与回收站。
+func (s *FolderService) ShowDesktopIcons() error {
+	if err := showDesktopIcons(); err != nil {
+		return s.fail(err)
+	}
+	s.appendLog("INFO", "已在桌面显示此电脑/控制面板/网络/用户文件/回收站")
+	return nil
+}
+
+// AlignTaskbarLeft 将 Win11 任务栏与开始按钮左对齐。
+func (s *FolderService) AlignTaskbarLeft() error {
+	if err := alignTaskbarLeft(); err != nil {
+		return s.fail(err)
+	}
+	s.appendLog("INFO", "已将任务栏与开始按钮左对齐")
+	return nil
+}
+
+// ShowHiddenFiles 显示隐藏文件与扩展名，但不显示受保护的系统文件。
+func (s *FolderService) ShowHiddenFiles() error {
+	if err := showHiddenFiles(); err != nil {
+		return s.fail(err)
+	}
+	s.appendLog("INFO", "已显示隐藏文件与扩展名，不显示受保护的系统文件")
+	return nil
+}
+
+// RemoveShortcutArrow 去掉桌面快捷方式小箭头，需要管理员权限。
+func (s *FolderService) RemoveShortcutArrow() error {
+	if err := removeShortcutArrow(); err != nil {
+		return s.fail(err)
+	}
+	s.appendLog("INFO", "已去掉桌面快捷方式的小箭头")
+	return nil
+}
+
 // isProtectedPath 禁止操作系统目录、程序所在目录和驱动器根目录。
 func isProtectedPath(path string) bool {
 	clean := strings.ToLower(filepath.Clean(path))
