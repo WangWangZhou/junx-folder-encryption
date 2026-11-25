@@ -9,6 +9,7 @@ export {
 
 export {
     ConfigInfo,
+    DeleteRisk,
     DropFiles,
     JunxProgress,
     PathProbe,

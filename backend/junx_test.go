@@ -311,6 +311,33 @@ func TestServiceJunxGenericDecrypt(t *testing.T) {
 	}
 }
 
+func TestServiceEncryptPathAutoKind(t *testing.T) {
+	service := newTestService(t)
+
+	file := filepath.Join(t.TempDir(), "note.txt")
+	mustWrite(t, file, "hello")
+	if err := service.EncryptPath(file, "", false, "zh-CN"); err != nil {
+		t.Fatalf("自动识别文件加密失败: %v", err)
+	}
+	if _, err := os.Stat(file + junxExt); err != nil {
+		t.Fatalf("未生成文件容器: %v", err)
+	}
+
+	folder := filepath.Join(t.TempDir(), "资料")
+	mustMkdir(t, folder)
+	mustWrite(t, filepath.Join(folder, "a.txt"), "A")
+	if err := service.EncryptPath(folder, "", false, "zh-CN"); err != nil {
+		t.Fatalf("自动识别文件夹加密失败: %v", err)
+	}
+	if _, err := os.Stat(folder + junxExt); err != nil {
+		t.Fatalf("未生成文件夹容器: %v", err)
+	}
+
+	if err := service.EncryptPath(file+junxExt, "", false, "zh-CN"); err == nil {
+		t.Fatalf("对 .junx 容器再次加密应被拒绝")
+	}
+}
+
 func TestServiceJunxOutputExistsRejected(t *testing.T) {
 	service := newTestService(t)
 	dir := t.TempDir()
@@ -405,5 +432,46 @@ func TestJunxKindMark(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "资料 (2)")); err != nil {
 		t.Fatalf("未按清单重建目录: %v", err)
+	}
+}
+
+func TestProtectedPathSystemRoots(t *testing.T) {
+	drive := strings.TrimSpace(os.Getenv("SystemDrive"))
+	if drive == "" {
+		drive = "C:"
+	}
+	root := drive + string(os.PathSeparator)
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{filepath.Join(root, "Windows", "System32"), true},
+		{filepath.Join(root, "Program Files"), true},
+		{filepath.Join(root, "AMD"), true},
+		{filepath.Join(root, "Recovery"), true},
+		{filepath.Join(root, "Users"), true},
+		{filepath.Join(root, "Users", "MagicBook"), false},
+	}
+	for _, tc := range cases {
+		if got := isProtectedPath(tc.path); got != tc.want {
+			t.Errorf("isProtectedPath(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
+func TestIsUnderHome(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "Users", "alice")
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{home, true},
+		{filepath.Join(home, "Documents", "a.txt"), true},
+		{filepath.Join(filepath.Dir(home), "bob", "a.txt"), false},
+	}
+	for _, tc := range cases {
+		if got := isUnderHome(tc.path, home); got != tc.want {
+			t.Errorf("isUnderHome(%q) = %v, want %v", tc.path, got, tc.want)
+		}
 	}
 }

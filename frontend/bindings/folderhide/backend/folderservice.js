@@ -33,6 +33,18 @@ export function ChangeConfigPath(dir) {
 }
 
 /**
+ * CheckDeleteRisk 判断目标路径删除风险。
+ * 个人文件夹允许加密，但不应自动删除；Reason 使用稳定标识，文案由前端本地化。
+ * @param {string} path
+ * @returns {$CancellablePromise<$models.DeleteRisk>}
+ */
+export function CheckDeleteRisk(path) {
+    return $Call.ByID(440336965, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * ClearLogs 清空内存日志。
  * @returns {$CancellablePromise<void>}
  */
@@ -57,7 +69,7 @@ export function ClearRecentFiles() {
  */
 export function ConfigurePin(pin, length, policy) {
     return $Call.ByID(589463912, pin, length, policy).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -81,7 +93,7 @@ export function DecryptFolderByACL(path) {
 
 /**
  * DecryptJunx 通用解密：读取容器清单后自动决定还原单个文件还是整个目录树。
- * 两个加密页与批量解密都调用它，用户无需事先知道容器里装的是什么。
+ * 加密页与批量解密都调用它，用户无需事先知道容器里装的是什么。
  * @param {string} junxPath
  * @returns {$CancellablePromise<void>}
  */
@@ -97,7 +109,7 @@ export function DecryptJunx(junxPath) {
  */
 export function DisablePin(locale) {
     return $Call.ByID(302507544, locale).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -146,12 +158,25 @@ export function EncryptFolderToJunx(path, outputName, deleteOriginal, locale) {
 }
 
 /**
+ * EncryptPath 自动识别路径类型并打包为 .junx。
+ * 普通文件与文件夹共用同一入口；已是 .junx 的容器请使用 DecryptJunx。
+ * @param {string} path
+ * @param {string} outputName
+ * @param {boolean} deleteOriginal
+ * @param {string} locale
+ * @returns {$CancellablePromise<void>}
+ */
+export function EncryptPath(path, outputName, deleteOriginal, locale) {
+    return $Call.ByID(1727879467, path, outputName, deleteOriginal, locale);
+}
+
+/**
  * GetConfigInfo 返回前端展示用的配置摘要。
  * @returns {$CancellablePromise<$models.ConfigInfo>}
  */
 export function GetConfigInfo() {
     return $Call.ByID(2396961623).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
@@ -162,7 +187,7 @@ export function GetConfigInfo() {
  */
 export function GetPinState() {
     return $Call.ByID(1574496005).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType3($result);
     }));
 }
 
@@ -172,7 +197,7 @@ export function GetPinState() {
  */
 export function GetStartupState() {
     return $Call.ByID(134801147).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType4($result);
     }));
 }
 
@@ -182,7 +207,7 @@ export function GetStartupState() {
  */
 export function Lock() {
     return $Call.ByID(3940120864).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -238,7 +263,7 @@ export function OpenLogFolder() {
  */
 export function ProbePaths(paths) {
     return $Call.ByID(3161538085, paths).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
 }
 
@@ -256,7 +281,7 @@ export function Quit() {
  */
 export function RecentLogs() {
     return $Call.ByID(1632993871).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType7($result);
     }));
 }
 
@@ -296,7 +321,7 @@ export function SetAlwaysOnTop(enabled) {
  */
 export function SetAutoLock(enabled, locale) {
     return $Call.ByID(766404873, enabled, locale).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -369,7 +394,7 @@ export function ShowHiddenFiles() {
  */
 export function Unlock(pin) {
     return $Call.ByID(2735461583, pin).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -382,10 +407,11 @@ export function Version() {
 }
 
 // Private type creation functions
-const $$createType0 = $models.PinResult.createFrom;
-const $$createType1 = $models.ConfigInfo.createFrom;
-const $$createType2 = $models.PinState.createFrom;
-const $$createType3 = $models.StartupState.createFrom;
-const $$createType4 = $models.PathProbe.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $Create.Array($Create.Any);
+const $$createType0 = $models.DeleteRisk.createFrom;
+const $$createType1 = $models.PinResult.createFrom;
+const $$createType2 = $models.ConfigInfo.createFrom;
+const $$createType3 = $models.PinState.createFrom;
+const $$createType4 = $models.StartupState.createFrom;
+const $$createType5 = $models.PathProbe.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = $Create.Array($Create.Any);

@@ -31,7 +31,7 @@ import DocLayout from "../../layouts/DocLayout.astro";
 		<tbody>
 			<tr><td><code>language</code></td><td><code>zh-CN</code> / <code>en</code> / <code>ja</code></td><td>显示语言，首次启动按系统语言自动选择</td></tr>
 			<tr><td><code>alwaysOnTop</code></td><td><code>true</code> / <code>false</code></td><td>窗口是否总在最前</td></tr>
-			<tr><td><code>batchFile</code> / <code>batchFolder</code></td><td><code>true</code> / <code>false</code></td><td>是否启用对应的批量任务支持</td></tr>
+			<tr><td><code>batchFile</code> / <code>batchFolder</code></td><td><code>true</code> / <code>false</code></td><td>加密批量任务固定开启，两个字段同步写入 <code>true</code> 以兼容旧版配置</td></tr>
 			<tr><td><code>logLevel</code></td><td><code>off</code> / <code>trace</code> / <code>debug</code> / <code>normal</code></td><td>文件日志级别，默认 <code>normal</code></td></tr>
 			<tr><td><code>pin</code></td><td>对象或 <code>null</code></td><td>锁屏密码状态，只保存密文；<code>null</code> 表示未设置</td></tr>
 		</tbody>

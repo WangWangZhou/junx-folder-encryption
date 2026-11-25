@@ -22,7 +22,7 @@ go vet ./...`}</code></pre>
 		<li><strong>路径安全</strong>：拒绝 <code>..</code>、绝对路径与盘符路径。</li>
 		<li><strong>批量探测</strong>：文件 / 文件夹 / <code>.junx</code> 类型识别、容器标记（文件 / 文件夹 / 未知）、目标 <code>.junx</code> 是否已存在。</li>
 		<li><strong>容器标记</strong>：文件与文件夹容器写入不同标记、标记被篡改时仍按加密清单还原。</li>
-		<li><strong>通用解密</strong>：文件夹容器在文件页、文件容器在文件夹页都能正确还原。</li>
+		<li><strong>通用解密</strong>：文件容器与文件夹容器都由同一入口按内部清单还原。</li>
 		<li><strong>配置</strong>：JSONC 注释保留、默认值生成、旧 <code>pin.json</code> 迁移与一次性迁移标记、<code>ResetConfig</code> 恢复默认并清除 PIN。</li>
 		<li><strong>日志</strong>：按天文件写入、文件被删除后自动重建、7 天清理。</li>
 		<li><strong>窗口状态</strong>：读写往返、文件缺失或损坏回退默认、同屏恢复原坐标、显示器拔除后回退主屏居中、越界坐标钳制到工作区、无屏幕信息时回退原点、非法尺寸拒绝保存。</li>

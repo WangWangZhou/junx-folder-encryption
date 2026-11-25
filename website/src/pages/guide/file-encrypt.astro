@@ -3,37 +3,44 @@ import DocLayout from "../../layouts/DocLayout.astro";
 ---
 
 <DocLayout
-	title="文件加密使用"
-	description="把单个文件用 AES-256-GCM 打包为 .junx 容器，容器内的文件名同样被加密。"
+	title="加密使用"
+	description="文件与文件夹共用同一「加密」标签页，用 AES-256-GCM 打包为 .junx 容器，内部名称与目录树一并加密。"
 >
 	<p>
-		文件加密把目标文件封装成 <code>.junx</code> 容器，内容使用 AES-256-GCM 加密，内部文件名与元数据一并加密。解密固定输出到 <code>.junx</code> 所在目录。
+		文件与文件夹已合并到同一个「加密」标签页。程序会自动判断目标路径是文件还是文件夹，并用 AES-256-GCM 打包为 <code>.junx</code> 容器；解密固定输出到 <code>.junx</code> 所在目录。
 	</p>
 
-	<h2>加密单个文件</h2>
+	<h2>加密文件或文件夹</h2>
 	<ol class="steps">
-		<li>打开「文件加密」标签页。</li>
-		<li>在「目标文件」中填入文件路径，或点击「浏览…」选择；也支持把文件直接拖入窗口。</li>
-		<li>「输出名称」留空时取源文件名并自动追加 <code>.junx</code>；也可自定义名称。</li>
-		<li>如需删除原文件，勾选「加密后删除原文件，不放入回收站」——此操作不可恢复。</li>
+		<li>打开「加密」标签页。</li>
+		<li>在「目标路径」中填入文件或文件夹路径，或点击「浏览…」选择；也支持直接拖入窗口。</li>
+		<li>「输出名称」留空时取源文件/目录名并自动追加 <code>.junx</code>；也可自定义名称。</li>
+		<li>如需删除原路径，勾选「加密后删除原文件/文件夹，不放入回收站」——此操作不可恢复。若路径位于个人文件夹，程序会弹出风险提示并自动取消勾选，加密完成后请手动删除。</li>
 		<li>点击「开始加密」，进度条显示当前阶段与百分比。</li>
 	</ol>
 	<figure>
-		<img src="/screenshots/file-encrypt.png" alt="文件加密界面" width="620" height="500" />
-		<figcaption>文件加密界面：目标文件、输出名称、删除原文件选项与加解密按钮</figcaption>
+		<img src="/screenshots/file-encrypt.png" alt="加密单个文件" width="620" height="500" />
+		<figcaption>加密文件：目标路径、输出名称与加解密操作</figcaption>
+	</figure>
+	<figure>
+		<img src="/screenshots/folder-encrypt.png" alt="加密文件夹" width="620" height="500" />
+		<figcaption>加密文件夹：同一页面选择目录，类型由程序自动识别</figcaption>
 	</figure>
 
-	<h2>解密文件</h2>
+	<h2>解密</h2>
 	<ol class="steps">
-		<li>在「目标文件」中填入 <code>.junx</code> 文件路径，或把容器拖入窗口。</li>
-		<li>点击「开始解密」，在原目录还原文件。</li>
-		<li>若同名文件已存在，会自动追加 <code>(2)</code>、<code>(3)</code>，绝不覆盖。</li>
+		<li>在「目标路径」中填入 <code>.junx</code> 文件路径，或把容器拖入窗口。</li>
+		<li>点击「开始解密」，按容器内部清单还原单个文件或整个目录树。</li>
+		<li>若同名文件/目录已存在，会自动追加 <code>(2)</code>、<code>(3)</code>，绝不覆盖。</li>
 	</ol>
+	<p class="note">
+		程序会为文件与文件夹容器写入不同标记；即使标记被篡改，也会按加密清单还原。旧版本生成的 <code>.junx</code> 容器仍可正常解密。
+	</p>
 
 	<h2>注意事项</h2>
 	<ul>
 		<li>密钥内置在程序中，拿到程序的人都能离线解密；适合防误看，不适合对抗专业取证。</li>
-		<li>加密过程会把整个载荷放在内存中封装，超大文件建议分批或控制体积。</li>
+		<li>加密过程会把整个载荷放在内存中封装，超大文件或目录建议控制体积。</li>
 		<li>没有密码找回机制，请妥善保管容器文件。</li>
 	</ul>
 </DocLayout>

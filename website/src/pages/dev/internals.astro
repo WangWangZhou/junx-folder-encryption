@@ -40,8 +40,8 @@ import DocLayout from "../../layouts/DocLayout.astro";
 		<li>第 9 字节的类型标记在密文之外、明文可见（只泄露「单个文件 / 目录树」这一位信息），仅用于批量任务添加时提前判断；实际还原始终以加密清单里的 <code>kind</code> 为准，标记与清单冲突时按清单处理并记 <code>[WARN]</code>。</li>
 		<li>密钥由内置字符串 <code>folderhide-junx-v1</code> 经 SHA-256 派生，与方案B 的元数据密钥分开，避免共用密钥流。</li>
 		<li>加密流程：扫描 → 打包 → 封装 → 写临时文件 → 回读并解密校验 → 改名为正式 <code>.junx</code>，任一步失败都会删除临时文件。</li>
-		<li>勾选「加密后删除原文件 / 原文件夹」时，只有在校验通过后才弹原生二次确认框；选「删除」才永久删除（<code>os.RemoveAll</code>，不进入回收站）。</li>
-		<li>解密走通用入口 <code>DecryptJunx</code>：两个加密页都能解任何容器，由清单里的 <code>kind</code> 自动决定还原单个文件还是整个目录树。</li>
+		<li>勾选「加密后删除原文件/文件夹」时，只有在校验通过后才弹原生二次确认框；选「删除」才永久删除（<code>os.RemoveAll</code>，不进入回收站）。个人文件夹（<code>os.UserHomeDir()</code> 及其子树）由前后端双重保护：弹风险提示、自动取消勾选，后端即使收到删除请求也只保留原路径并记 <code>[WARN]</code>。</li>
+		<li>加密统一走 <code>EncryptPath</code>：自动探测文件 / 文件夹后分派，旧的 <code>EncryptFileToJunx</code> / <code>EncryptFolderToJunx</code> 保留为兼容包装。解密走通用入口 <code>DecryptJunx</code>，由清单里的 <code>kind</code> 自动决定还原单个文件还是整个目录树。</li>
 		<li>解密固定输出到 <code>.junx</code> 所在目录，遇到同名一律自动改名为 <code>名称 (2)</code>、<code>名称 (3)</code>，文件保留扩展名，绝不覆盖、不报错。</li>
 		<li>篡改密文、错误 magic、清单越界路径、文件头不完整都会被拒绝；相对路径统一做 <code>..</code> 越界检查。符号链接与设备文件不会被打包，日志中提示跳过数量。</li>
 	</ul>
@@ -50,8 +50,8 @@ import DocLayout from "../../layouts/DocLayout.astro";
 	<ul>
 		<li>开关状态存入 <code>config.jsonc</code>；开启后窗口从 <code>414×400</code> 扩为 <code>576×470</code>，左侧出现 156px 批量面板。</li>
 		<li>首个任务决定批量性质：普通文件 / 文件夹 → 加密任务，<code>.junx</code> → 解密任务；之后类型不符的条目一律拒绝。</li>
-		<li>添加前用后端只读接口 <code>ProbePaths</code> 校验：路径存在、页面类型匹配、重复、目标 <code>.junx</code> 已存在、父子目录包含关系。</li>
-		<li>文件夹批量不支持嵌套：先加父文件夹再拖入子文件夹会被拒绝；先加子再加入父会弹原生询问，确认后合并为父文件夹任务。</li>
+		<li>添加前用后端只读接口 <code>ProbePaths</code> 校验：路径存在、类型（file / folder / junx）、重复、目标 <code>.junx</code> 已存在、父子路径包含关系。</li>
+		<li>加密队列不支持路径嵌套：先加父路径再拖入其子路径会被拒绝；先加子再加入父会弹原生询问，确认后合并为父路径任务。</li>
 		<li>子任务串行执行；运行期间锁定当前页面。总进度公式为 <code>(已完成数 + 当前任务进度/100) / 启动时冻结的任务总数</code>。</li>
 		<li>删除任务只移除队列项，不触碰磁盘文件；失败任务保留并标红。</li>
 	</ul>
@@ -68,11 +68,11 @@ import DocLayout from "../../layouts/DocLayout.astro";
   // 窗口是否总在最前（播放器式置顶）
   "alwaysOnTop": true,
 
-  // 是否启用文件加密批量任务
-  "batchFile": false,
+  // 加密批量任务固定开启（兼容旧版字段，与 batchFolder 同步）
+  "batchFile": true,
 
-  // 是否启用文件夹加密批量任务
-  "batchFolder": false,
+  // 加密批量任务固定开启（兼容旧版字段，与 batchFile 同步）
+  "batchFolder": true,
 
   // 文件日志级别：off / trace / debug / normal
   "logLevel": "normal",

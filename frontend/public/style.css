@@ -44,8 +44,9 @@ body {
     overflow: hidden;
 }
 
-/* 右侧主体：一级标签 + 面板 + 底部提示。批量面板展开时它保持原有宽度。 */
+/* 左侧主体：一级标签 + 面板 + 底部提示。批量面板展开时它保持原有位置与宽度。 */
 .app-main {
+    order: 1;
     flex: 1;
     min-width: 0;
     display: flex;
@@ -171,6 +172,12 @@ body {
 
 .panel.active {
     display: flex;
+    animation: panel-fade-in 120ms ease-out;
+}
+
+@keyframes panel-fade-in {
+    from { opacity: 0; transform: translateY(2px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
 .subpanel {
@@ -231,12 +238,8 @@ body {
     min-width: 2.5em;
 }
 
-#tabFileEnc .field-row > label[for] {
+#tabEnc .field-row > label[for] {
     min-width: 4em;
-}
-
-#tabFolderEnc .field-row > label[for] {
-    min-width: 5em;
 }
 
 input[type="text"],
@@ -446,37 +449,43 @@ select:focus {
     color: #7a7a7a;
 }
 
-.pin-fixed-hint {
-    flex: 0 0 auto;
-    color: var(--muted);
-    font-size: 12px;
-    white-space: nowrap;
-}
-
-.pin-enable-row {
+.pin-row {
     gap: 9px;
 }
 
-.auto-lock-row {
-    gap: 9px;
-}
-
-.auto-lock-row .btn {
+.pin-row .btn {
     margin-left: auto;
 }
 
-.auto-lock-row .btn:disabled {
+.pin-row .btn:disabled {
     opacity: 0.45;
     cursor: default;
 }
 
-#pinSetupRow.is-disabled {
-    opacity: 0.45;
+/* 设置密码弹层：输入框与按钮临时展示，不占用常规页高度 */
+.pin-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 260px;
+    padding: 14px;
+    border: 1px solid var(--line);
+    background: var(--panel);
 }
 
-#pinSetupRow.is-disabled .pin-digit,
-#pinSetupRow.is-disabled .btn {
-    pointer-events: none;
+.pin-dialog-title {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.pin-dialog .pin-setup-row {
+    justify-content: center;
+}
+
+.pin-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
 }
 
 .pin-setup-row {
@@ -649,8 +658,9 @@ select:focus {
 
 /* ================= 批量任务 ================= */
 
-/* 左侧批量面板：156px 宽，展开时窗口同步变宽，右侧内容宽度保持不变 */
+/* 右侧批量面板：156px 宽，展开时窗口只向右扩宽，主体位置保持不变 */
 .batch-panel {
+    order: 2;
     flex: 0 0 156px;
     display: flex;
     flex-direction: column;
@@ -1037,6 +1047,17 @@ select:focus {
     position: absolute;
     top: 3px;
     right: 6px;
+}
+
+/* 图标按钮：固定 20×20 点击区，去除文字按钮的内边距 */
+.icon-only {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    line-height: 1;
 }
 
 .config-actions {

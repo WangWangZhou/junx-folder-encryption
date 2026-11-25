@@ -189,7 +189,7 @@ func TestResetConfigClearsPinAndState(t *testing.T) {
 	if got.Pin != nil {
 		t.Fatalf("恢复默认后 PIN 未清除: %+v", got.Pin)
 	}
-	if got.LogLevel != "normal" || got.AlwaysOnTop != true || got.BatchFile || got.BatchFolder {
+	if got.LogLevel != "normal" || got.AlwaysOnTop != true || !got.BatchFile || !got.BatchFolder {
 		t.Fatalf("恢复默认值错误: %+v", got)
 	}
 	if !got.LegacyMigrated || !got.LegacyPinMigrated {
@@ -206,10 +206,10 @@ func TestResetConfigClearsPinAndState(t *testing.T) {
 
 func TestNormalizeLogLevel(t *testing.T) {
 	cases := map[string]string{
-		"OFF":    "off",
-		"Trace":  "trace",
+		"OFF":     "off",
+		"Trace":   "trace",
 		" debug ": "debug",
-		"other":  "normal",
+		"other":   "normal",
 	}
 	for input, want := range cases {
 		if got := normalizeLogLevel(input); got != want {

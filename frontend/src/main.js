@@ -5,18 +5,18 @@ import { t, getLocale, setLocale, onLocaleChange } from "./i18n.js";
 
 const el = (id) => document.getElementById(id);
 const logBox = el("logBox");
-const hint = el("hint");
 const logGroup = el("logGroup");
 const langSelect = el("langSelect");
 const autoStartChk = el("autoStartChk");
 const runAsAdminChk = el("runAsAdminChk");
 const runAsAdminLabel = el("runAsAdminLabel");
 const pinEnableChk = el("pinEnableChk");
-const pinSetupRow = el("pinSetupRow");
+const pinSetupOverlay = el("pinSetupOverlay");
 const setupPinBoxes = el("setupPinBoxes");
 const confirmPinBoxes = el("confirmPinBoxes");
 const pinClearBtn = el("pinClearBtn");
 const pinSaveBtn = el("pinSaveBtn");
+const pinCancelBtn = el("pinCancelBtn");
 const pinSetupError = el("pinSetupError");
 const lockOverlay = el("lockOverlay");
 const unlockMessage = el("unlockMessage");
@@ -41,15 +41,6 @@ const removeShortcutArrowBtn = el("removeShortcutArrowBtn");
 // 打开密码固定为 4 位、无限次尝试。
 const PIN_LENGTH = 4;
 const PIN_POLICY = "unlimited";
-
-const hintKeyByTab = {
-    tabHide: "hint.hide",
-    tabFileEnc: "hint.fileEnc",
-    tabFolderEnc: "hint.folderEnc",
-    tabOther: "hint.other",
-    tabGeneral: "hint.general",
-    tabAbout: "hint.about",
-};
 
 // 这两页内容较高：切到它们时隐藏日志区，并按内容调整窗口高度。
 const TALL_TAB_IDS = new Set(["tabGeneral", "tabOther"]);
@@ -77,11 +68,6 @@ function syncLockOverlay(state) {
     syncAutoLockControls(state);
     showLockOverlay(state);
     setUnlockMessage("");
-}
-
-function refreshHint() {
-    hint.textContent = t(hintKeyByTab[currentTab] || "");
-    refreshLogPlaceholder();
 }
 
 // 日志为空时（例如刚清空）显示与输入框 placeholder 同色的提示文字。
@@ -164,11 +150,8 @@ pinTopBtn.addEventListener("click", () => {
 
 // 一级标签切换：面板互斥显示，常规/关于页隐藏日志区腾出空间。
 function switchTab(tabId) {
-    // 批量运行期间锁定在当前页面，避免队列跑在后台却看不到进度。
-    if (batch.running) {
-        const runningTab = batch.page === "file" ? "tabFileEnc" : "tabFolderEnc";
-        if (tabId !== runningTab) return;
-    }
+    // 批量运行期间锁定在加密页，避免队列跑在后台却看不到进度。
+    if (batch.running && tabId !== "tabEnc") return;
     document.querySelectorAll(".tab").forEach((item) => {
         item.classList.toggle("active", item.dataset.tab === tabId);
     });
@@ -176,22 +159,19 @@ function switchTab(tabId) {
         item.classList.toggle("active", item.id === tabId);
     });
     currentTab = tabId;
-    refreshHint();
+    refreshLogPlaceholder();
     logGroup.classList.toggle("hidden", tabId === "tabAbout" || TALL_TAB_IDS.has(tabId));
 
     if (TALL_TAB_IDS.has(tabId) && !batch.open) {
-        // 面板显示后再测量：ResizeObserver 此时通常不会触发，必须主动拉长窗口。
-        requestAnimationFrame(() => requestAnimationFrame(schedulePanelResize));
+        // 面板显示后测量一次；命中高度缓存时直接到位，避免多次 SetSize 造成卡顿。
+        requestAnimationFrame(() => resizePanelWindow().catch(showError));
     } else if (!batch.open && lastPanelHeight !== SINGLE_SIZE.height) {
         lastPanelHeight = SINGLE_SIZE.height;
         setWindowSize(SINGLE_SIZE).catch(showError);
     }
 
     // 离开批量任务所属页面时收起面板，避免跨页操作队列。
-    if (batch.open) {
-        const expected = batch.page === "file" ? "tabFileEnc" : "tabFolderEnc";
-        if (tabId !== expected) closeBatch();
-    }
+    if (batch.open && tabId !== "tabEnc") closeBatch();
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -268,40 +248,24 @@ el("decryptBtnD").addEventListener("click", async () => {
     }
 });
 
-// 加密页配置：文件与文件夹两页结构一致，只有后端方法和提示语不同。
-const encPages = {
-    file: {
-        kind: "file",
-        src: el("fileEncSrc"),
-        out: el("fileEncOut"),
-        del: el("fileEncDelete"),
-        fill: el("fileEncFill"),
-        text: el("fileEncText"),
-        start: el("fileEncStart"),
-        decrypt: el("fileEncDecrypt"),
-        pick: el("fileEncPick"),
-        batch: el("fileEncBatch"),
-        needMsg: "msg.needSource",
-    },
-    folder: {
-        kind: "folder",
-        src: el("folderEncSrc"),
-        out: el("folderEncOut"),
-        del: el("folderEncDelete"),
-        fill: el("folderEncFill"),
-        text: el("folderEncText"),
-        start: el("folderEncStart"),
-        decrypt: el("folderEncDecrypt"),
-        pick: el("folderEncPick"),
-        batch: el("folderEncBatch"),
-        needMsg: "msg.needSourceFolder",
-    },
+// 加密页配置：文件与文件夹合并为同一页，类型由后端自动识别。
+const encPage = {
+    src: el("encSrc"),
+    out: el("encOut"),
+    del: el("encDelete"),
+    fill: el("encFill"),
+    text: el("encText"),
+    start: el("encStart"),
+    decrypt: el("encDecrypt"),
+    pick: el("encPick"),
+    batch: el("encBatch"),
+    needMsg: "msg.needSource",
 };
 
 // ================= 批量任务 =================
 // 队列只在前端维护：单线程串行调用现有单任务接口，暂停/删除仅作用于排队中的任务。
-const BATCH_SETTINGS_KEY = "folder-hide-batch-settings";
-const BATCH_SIZE = { width: 576, height: 470 };
+// 批量态只向右扩宽，高度与常规态一致，避免鼠标下的按钮上下跳动。
+const BATCH_SIZE = { width: 576, height: 400 };
 const SINGLE_SIZE = { width: 414, height: 400 };
 
 const batchPanel = el("batchPanel");
@@ -310,15 +274,12 @@ const batchEmpty = el("batchEmpty");
 const batchModeLabel = el("batchMode");
 const batchGridBtn = el("batchGridBtn");
 const batchListBtn = el("batchListBtn");
-const batchFileChk = el("batchFileChk");
-const batchFolderChk = el("batchFolderChk");
 
 const batch = {
     open: false,
-    page: "file",       // 面板当前所属页面
     view: "grid",       // grid | list
     mode: "",           // "" | encrypt | decrypt，由第一个任务决定
-    lists: { file: [], folder: [] },
+    tasks: [],           // 文件与文件夹共用同一队列
     running: false,
     total: 0,           // 启动时冻结，暂停/删除时递减
     done: 0,
@@ -326,25 +287,12 @@ const batch = {
 };
 
 function batchList() {
-    return batch.lists[batch.page];
+    return batch.tasks;
 }
 
 function readBatchSettings() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(BATCH_SETTINGS_KEY) || "{}");
-        return { file: !!saved.file, folder: !!saved.folder };
-    } catch (_) {
-        return { file: false, folder: false };
-    }
-}
-
-function saveBatchSettings(settings) {
-    try {
-        localStorage.setItem(BATCH_SETTINGS_KEY, JSON.stringify(settings));
-    } catch (_) {
-        // 持久化失败只影响下次启动的默认状态。
-    }
-    FolderService.SetBatchSettings(settings.file, settings.folder).catch(showError);
+    // 批量入口固定开启；迁移旧配置时同步写入两个兼容字段。
+    return { file: true, folder: true };
 }
 
 function baseName(path) {
@@ -377,15 +325,7 @@ async function checkBatchPath(probe, list) {
         return { ok: false, reason: t("batch.errOther", { name: baseName(probe.Path) }) };
     }
 
-    const isJunx = probe.Kind === "junx";
-    if (!isJunx && batch.page === "file" && probe.Kind !== "file") {
-        return { ok: false, reason: t("batch.errNeedFile", { name: baseName(probe.Path) }) };
-    }
-    if (!isJunx && batch.page === "folder" && probe.Kind !== "folder") {
-        return { ok: false, reason: t("batch.errNeedFolder", { name: baseName(probe.Path) }) };
-    }
-
-    const mode = isJunx ? "decrypt" : "encrypt";
+    const mode = probe.Kind === "junx" ? "decrypt" : "encrypt";
     if (batch.mode && batch.mode !== mode) {
         return {
             ok: false,
@@ -403,10 +343,12 @@ async function checkBatchPath(probe, list) {
         return { ok: false, reason: t("batch.errOutputExists", { name: probe.OutputPath }) };
     }
 
-    if (mode === "encrypt" && batch.page === "folder") {
+    if (mode === "encrypt") {
+        // 新路径落在已有任务内部时直接拒绝，避免父子路径被重复打包。
         if (list.some((task) => isSubPath(task.source, probe.Path))) {
             return { ok: false, reason: t("batch.errNested", { name: baseName(probe.Path) }) };
         }
+        // 新路径包含已有任务时询问是否移除子任务，只打包父路径。
         const parents = list.filter((task) => isSubPath(probe.Path, task.source));
         if (parents.length) {
             const merge = await askMerge(probe.Path, parents.length);
@@ -568,7 +510,7 @@ function syncBatchControls() {
     batchListBtn.classList.toggle("active", batch.view === "list");
     if (!batch.open) return;
 
-    const page = encPages[batch.page];
+    const page = encPage;
     const list = batchList();
     if (batch.running) return;
     // 批量性质确定后，另一个操作按钮不可用。
@@ -623,7 +565,7 @@ function removeTaskSilently(id) {
 // 总进度：完成数 + 当前任务进度，分母是启动时冻结的总数（暂停/删除会从分母扣除）。
 function refreshBatchProgress() {
     if (!batch.running) return;
-    const page = encPages[batch.page];
+    const page = encPage;
     const current = batchList().find((task) => task.id === batch.currentId);
     const percent = current ? current.percent : 0;
     const value = batch.total > 0 ? Math.min(100, Math.round(((batch.done + percent / 100) / batch.total) * 100)) : 100;
@@ -633,7 +575,7 @@ function refreshBatchProgress() {
 
 async function runBatch(kind) {
     if (batch.running) return;
-    const page = encPages[batch.page];
+    const page = encPage;
     const list = batchList();
     if (!list.length) {
         showError(t("batch.errEmpty"));
@@ -670,11 +612,8 @@ async function runBatch(kind) {
             renderBatch();
             try {
                 if (kind === "encrypt") {
-                    if (batch.page === "file") {
-                        await FolderService.EncryptFileToJunx(task.source, "", false, getLocale());
-                    } else {
-                        await FolderService.EncryptFolderToJunx(task.source, "", false, getLocale());
-                    }
+                    // 统一入口：容器类型由后端探测源文件/文件夹后决定。
+                    await FolderService.EncryptPath(task.source, "", false, getLocale());
                 } else {
                     // 通用解密：容器里是文件还是文件夹由清单决定。
                     await FolderService.DecryptJunx(task.source);
@@ -712,20 +651,13 @@ function applyBatchUI() {
     batchPanel.classList.toggle("hidden", !open);
     document.body.classList.toggle("batch-mode", open);
 
-    Object.entries(encPages).forEach(([kind, page]) => {
-        const active = open && kind === batch.page;
-        page.src.classList.toggle("batch-drop", active);
-        page.src.readOnly = active;
-        page.out.disabled = active;
-        page.del.disabled = active;
-        page.pick.disabled = active;
-        page.batch.classList.toggle("active", open && kind === batch.page);
-        if (active) {
-            page.src.placeholder = t("placeholder.batchDrop");
-        } else {
-            page.src.placeholder = t(kind === "file" ? "placeholder.filePath" : "placeholder.folderPath");
-        }
-    });
+    encPage.src.classList.toggle("batch-drop", open);
+    encPage.src.readOnly = open;
+    encPage.out.disabled = open;
+    encPage.del.disabled = open;
+    encPage.pick.disabled = open;
+    encPage.batch.classList.toggle("active", open);
+    encPage.src.placeholder = open ? t("placeholder.batchDrop") : t("placeholder.sourcePath");
 }
 
 async function setWindowSize(size) {
@@ -736,21 +668,27 @@ async function setWindowSize(size) {
     }
 }
 
-// 内容较高的页面按内容自然增高：只在真正溢出或明显富余时调整窗口，避免来回抖动。
+// 内容较高的页面按内容增高：高度只测量一次并缓存，后续切换直接到位。
 let lastPanelHeight = SINGLE_SIZE.height;
 let panelResizeTimer = 0;
+const panelHeightCache = new Map();
 
 async function resizePanelWindow() {
     if (!TALL_TAB_IDS.has(currentTab) || batch.open) return;
+    const cached = panelHeightCache.get(currentTab);
+    if (cached !== undefined) {
+        if (lastPanelHeight !== cached) {
+            lastPanelHeight = cached;
+            await setWindowSize({ width: SINGLE_SIZE.width, height: cached });
+        }
+        return;
+    }
     const panel = el(currentTab);
-    const footer = document.querySelector(".bottom");
-    // 面板本身不再内部滚动，真正需要测量的是它是否越过底部提示所在的窗口边界。
-    const panelBottom = panel.getBoundingClientRect().bottom;
-    const footerHeight = footer ? footer.offsetHeight : 0;
-    const neededBottom = panelBottom + footerHeight + 8;
+    // 删除底部提示行后，只需测量面板底部是否越过窗口边界。
+    const neededBottom = panel.getBoundingClientRect().bottom + 8;
     const delta = Math.ceil(neededBottom - window.innerHeight);
-    if (Math.abs(delta) <= 4) return;
     const target = Math.max(SINGLE_SIZE.height, lastPanelHeight + delta);
+    panelHeightCache.set(currentTab, target);
     if (target === lastPanelHeight) return;
     lastPanelHeight = target;
     await setWindowSize({ width: SINGLE_SIZE.width, height: target });
@@ -771,19 +709,18 @@ if (typeof ResizeObserver !== "undefined") {
     });
 }
 
-async function openBatch(kind) {
-    if (batch.open && batch.page === kind) return;
+async function openBatch() {
+    if (batch.open) return;
     if (batch.running) return;
     if (activeProgress) {
         showError(t("msg.busy"));
         return;
     }
     batch.open = true;
-    batch.page = kind;
-    switchTab(kind === "file" ? "tabFileEnc" : "tabFolderEnc");
+    switchTab("tabEnc");
     applyBatchUI();
     renderBatch();
-    resetProgress(encPages[kind]);
+    resetProgress(encPage);
     await setWindowSize(BATCH_SIZE);
 }
 
@@ -793,14 +730,6 @@ async function closeBatch() {
     applyBatchUI();
     renderBatch();
     await setWindowSize(SINGLE_SIZE);
-}
-
-function syncBatchSettings() {
-    const settings = { file: batchFileChk.checked, folder: batchFolderChk.checked };
-    saveBatchSettings(settings);
-    encPages.file.batch.classList.toggle("hidden", !settings.file);
-    encPages.folder.batch.classList.toggle("hidden", !settings.folder);
-    if (batch.open && !settings[batch.page]) closeBatch();
 }
 
 // 同一时间只允许一个加解密任务，进度事件据此决定更新哪一页。
@@ -834,12 +763,12 @@ function setBusy(page, busy) {
     page.del.disabled = busy;
 }
 
-async function pickPath(kind) {
+async function pickPath() {
     const selected = await Dialogs.OpenFile({
-        CanChooseFiles: kind === "file",
-        CanChooseDirectories: kind === "folder",
+        CanChooseFiles: true,
+        CanChooseDirectories: true,
         AllowsMultipleSelection: false,
-        Title: t(kind === "file" ? "field.sourceFile" : "field.sourceFolder"),
+        Title: t("field.sourcePath"),
     });
     return typeof selected === "string" ? selected : "";
 }
@@ -855,6 +784,48 @@ async function pickJunxFile() {
     return typeof selected === "string" ? selected : "";
 }
 
+// 个人文件夹允许加密但不允许自动删除：检测后取消勾选并禁用，提示用户手动删除。
+let deleteRiskChecked = false;
+
+async function showDeleteRiskDialog() {
+    const yes = t("btn.yes");
+    try {
+        await Dialogs.Question({
+            Title: t("msg.deleteRiskTitle"),
+            Message: t("msg.deleteRisk"),
+            Buttons: [{ Label: yes, IsDefault: true }],
+        });
+    } catch (_) {
+        // 弹窗失败不影响主流程，后端仍有兜底保护。
+    }
+}
+
+async function applyDeleteRisk(path, notify = false) {
+    if (!path) return false;
+    let risk = null;
+    try {
+        risk = await FolderService.CheckDeleteRisk(path);
+    } catch (err) {
+        // 检测失败时不改变用户选择，后端仍会兜底拒绝删除。
+        return false;
+    }
+    const high = !!(risk && (risk.highRisk || risk.HighRisk));
+    deleteRiskChecked = high;
+    encPage.del.disabled = high;
+    encPage.del.title = high ? t("tip.deleteRiskDisabled") : "";
+    if (high && encPage.del.checked) {
+        encPage.del.checked = false;
+        if (notify) await showDeleteRiskDialog();
+    }
+    return high;
+}
+
+function setEncSource(path) {
+    encPage.src.value = path;
+    resetProgress(encPage);
+    applyDeleteRisk(path, true).catch(showError);
+}
+
 async function runEncrypt(page) {
     if (activeProgress) {
         showError(t("msg.busy"));
@@ -865,18 +836,17 @@ async function runEncrypt(page) {
         showError(t(page.needMsg));
         return;
     }
+    // 二次校验：用户可能在选路径后又勾回删除选项。
+    await applyDeleteRisk(src, true);
     const outName = page.out.value.trim();
-    const deleteOriginal = page.del.checked;
+    const deleteOriginal = page.del.checked && !deleteRiskChecked;
 
     activeProgress = page;
     resetProgress(page);
     setBusy(page, true);
     try {
-        if (page.kind === "file") {
-            await FolderService.EncryptFileToJunx(src, outName, deleteOriginal, getLocale());
-        } else {
-            await FolderService.EncryptFolderToJunx(src, outName, deleteOriginal, getLocale());
-        }
+        // 类型由后端探测，文件与文件夹共用同一入口。
+        await FolderService.EncryptPath(src, outName, deleteOriginal, getLocale());
     } catch (err) {
         showError(err);
     } finally {
@@ -907,7 +877,7 @@ async function runDecrypt(page) {
     resetProgress(page);
     setBusy(page, true);
     try {
-        // 通用解密：两个页面都能解任何容器，类型由清单决定。
+        // 通用解密：任何 .junx 容器都由此入口还原，类型由清单决定。
         await FolderService.DecryptJunx(junxPath);
     } catch (err) {
         showError(err);
@@ -917,40 +887,41 @@ async function runDecrypt(page) {
     }
 }
 
-Object.values(encPages).forEach((page) => {
-    page.pick.addEventListener("click", async () => {
-        try {
-            const path = await pickPath(page.kind);
-            if (path) {
-                page.src.value = path;
-                // 换了新的目标后，上一轮进度条不应继续显示 100%
-                resetProgress(page);
-            }
-        } catch (err) {
-            showError(err);
+encPage.pick.addEventListener("click", async () => {
+    try {
+        const path = await pickPath();
+        if (path) {
+            // 换目标时重置进度，并重新判定删除风险。
+            setEncSource(path);
         }
-    });
-    page.start.addEventListener("click", () => {
-        if (batch.open) {
-            runBatch("encrypt");
-            return;
-        }
-        runEncrypt(page);
-    });
-    page.decrypt.addEventListener("click", () => {
-        if (batch.open) {
-            runBatch("decrypt");
-            return;
-        }
-        runDecrypt(page);
-    });
-    page.batch.addEventListener("click", () => {
-        if (batch.open && batch.page === page.kind) {
-            closeBatch();
-        } else {
-            openBatch(page.kind);
-        }
-    });
+    } catch (err) {
+        showError(err);
+    }
+});
+encPage.src.addEventListener("change", () => {
+    applyDeleteRisk(encPage.src.value.trim(), true).catch(showError);
+});
+
+encPage.start.addEventListener("click", () => {
+    if (batch.open) {
+        runBatch("encrypt");
+        return;
+    }
+    runEncrypt(encPage);
+});
+encPage.decrypt.addEventListener("click", () => {
+    if (batch.open) {
+        runBatch("decrypt");
+        return;
+    }
+    runDecrypt(encPage);
+});
+encPage.batch.addEventListener("click", () => {
+    if (batch.open) {
+        closeBatch();
+    } else {
+        openBatch();
+    }
 });
 
 function applyStartupState(state) {
@@ -1119,27 +1090,47 @@ function setPinSetupError(code) {
     pinSetupError.textContent = message === "pin.err." + code ? t("pin.err.error") : message;
 }
 
-// 设置区输入框仅在“勾选打开密码且尚未设置密码”时可编辑。
-// 一旦密码已启用，8 个输入框与清除/保存按钮全部只读，防止直接改写已生效的密码。
+// 设置弹层打开期间输入框始终可编辑；关闭时统一清理，不保留半成品输入。
 function syncPinSetupEditable() {
-    const editable = pinEnableChk.checked && !pinState.Enabled;
-    pinSetupRow.classList.toggle("is-disabled", !editable);
-    pinClearBtn.disabled = !editable;
-    pinSaveBtn.disabled = !editable;
+    pinClearBtn.disabled = false;
+    pinSaveBtn.disabled = false;
     setupPinBoxes.querySelectorAll(".pin-digit").forEach((box) => {
-        box.disabled = !editable;
+        box.disabled = false;
     });
     confirmPinBoxes.querySelectorAll(".pin-digit").forEach((box) => {
-        box.disabled = !editable;
+        box.disabled = false;
     });
+}
+
+function openPinSetup() {
+    clearPinBoxes(setupPinBoxes);
+    clearPinBoxes(confirmPinBoxes);
+    setPinSetupError("");
+    createPinBoxes(setupPinBoxes, PIN_LENGTH, focusConfirmFirst);
+    createPinBoxes(confirmPinBoxes, PIN_LENGTH);
+    syncPinSetupEditable();
+    pinSetupOverlay.classList.remove("hidden");
+    const first = setupPinBoxes.querySelector(".pin-digit");
+    if (first) first.focus();
+}
+
+function closePinSetup() {
+    pinSetupOverlay.classList.add("hidden");
+    clearPinBoxes(setupPinBoxes);
+    clearPinBoxes(confirmPinBoxes);
+    setPinSetupError("");
+    if (!pinState.Enabled) pinEnableChk.checked = false;
 }
 
 function applyPinState(state) {
     pinState = state || { Enabled: false, Length: PIN_LENGTH, Policy: PIN_POLICY, Locked: false, RemainingSeconds: 0, AttemptsLeft: -1, AutoLock: false, SessionLocked: false };
     pinEnableChk.checked = pinState.Enabled;
-    createPinBoxes(setupPinBoxes, PIN_LENGTH, focusConfirmFirst);
-    createPinBoxes(confirmPinBoxes, PIN_LENGTH);
-    syncPinSetupEditable();
+    // 只在弹层打开时重建输入框，避免状态轮询造成常驻页面反复重排。
+    if (!pinSetupOverlay.classList.contains("hidden")) {
+        createPinBoxes(setupPinBoxes, PIN_LENGTH, focusConfirmFirst);
+        createPinBoxes(confirmPinBoxes, PIN_LENGTH);
+        syncPinSetupEditable();
+    }
     syncAutoLockControls(pinState);
 }
 
@@ -1217,17 +1208,17 @@ manualLockBtn.addEventListener("click", async () => {
 
 pinEnableChk.addEventListener("change", async () => {
     const enabled = pinEnableChk.checked;
-    syncPinSetupEditable();
     if (enabled) {
-        // 已启用密码时复选框保持勾选但输入框只读；仅首次设置（尚未有密码）时聚焦输入。
-        if (!pinState.Enabled) {
-            setPinSetupError("");
-            const first = setupPinBoxes.querySelector(".pin-digit");
-            if (first) first.focus();
+        // 已启用时必须先取消，避免绕过旧密码直接重设。
+        if (pinState.Enabled) {
+            pinEnableChk.checked = true;
+            appendLog(t("pin.alreadyEnabled"));
+            return;
         }
+        openPinSetup();
         return;
     }
-    // 取消勾选时清空两行已输入内容，避免残留数字。
+    // 取消勾选：关闭已生效的密码。
     clearPinBoxes(setupPinBoxes);
     clearPinBoxes(confirmPinBoxes);
     setPinSetupError("");
@@ -1237,8 +1228,7 @@ pinEnableChk.addEventListener("change", async () => {
             applyPinState(result.State);
             if (!result.OK) {
                 pinEnableChk.checked = true;
-                syncPinSetupEditable();
-                setPinSetupError(result.Code);
+                showError(t("pin.err." + result.Code));
                 return;
             }
             appendLog(t("log.pinDisabled"));
@@ -1276,6 +1266,9 @@ pinSaveBtn.addEventListener("click", async () => {
             setPinSetupError(result.Code);
             return;
         }
+        pinSetupOverlay.classList.add("hidden");
+        clearPinBoxes(setupPinBoxes);
+        clearPinBoxes(confirmPinBoxes);
         setPinSetupError("");
         appendLog(t("log.pinEnabled"));
         showLockOverlay(result.State);
@@ -1288,6 +1281,8 @@ pinSaveBtn.addEventListener("click", async () => {
     }
 });
 
+pinCancelBtn.addEventListener("click", closePinSetup);
+
 langSelect.addEventListener("change", async (event) => {
     const value = event.target.value;
     setLocale(value);
@@ -1299,15 +1294,20 @@ langSelect.addEventListener("change", async (event) => {
 });
 
 onLocaleChange(() => {
-    refreshHint();
+    refreshLogPlaceholder();
+    // 语言变化可能改变文案长度，重新测量高页面的窗口高度。
+    panelHeightCache.clear();
+    if (TALL_TAB_IDS.has(currentTab)) schedulePanelResize();
     setUnlockMessage(unlockCode, pinState);
     setPinSetupError(setupCode);
     createPinBoxes(unlockPin, PIN_LENGTH, doUnlock);
-    createPinBoxes(setupPinBoxes, PIN_LENGTH, focusConfirmFirst);
-    createPinBoxes(confirmPinBoxes, PIN_LENGTH);
-    syncPinSetupEditable();
+    if (!pinSetupOverlay.classList.contains("hidden")) {
+        createPinBoxes(setupPinBoxes, PIN_LENGTH, focusConfirmFirst);
+        createPinBoxes(confirmPinBoxes, PIN_LENGTH);
+        syncPinSetupEditable();
+    }
     if (!activeProgress && !batch.running) {
-        Object.values(encPages).forEach(resetProgress);
+        resetProgress(encPage);
     }
     if (batch.open) {
         applyBatchUI();
@@ -1440,10 +1440,11 @@ resetConfigBtn.addEventListener("click", async () => {
         const level = ["off", "trace", "debug", "normal"].includes(info.logLevel) ? info.logLevel : "normal";
         logLevelSelect.value = level;
         previousLogLevel = level;
-        batchFileChk.checked = !!info.batchFile;
-        batchFolderChk.checked = !!info.batchFolder;
-        encPages.file.batch.classList.toggle("hidden", !info.batchFile);
-        encPages.folder.batch.classList.toggle("hidden", !info.batchFolder);
+        // 批量入口固定显示，旧配置里的关闭状态在这里顺带纠正。
+        encPage.batch.classList.remove("hidden");
+        if (!info.batchFile || !info.batchFolder) {
+            await FolderService.SetBatchSettings(true, true);
+        }
         await applyPinTop(typeof info.alwaysOnTop === "boolean" ? info.alwaysOnTop : readPinTop());
         const state = await FolderService.GetPinState();
         applyPinState(state);
@@ -1522,39 +1523,22 @@ Events.On(FilesDropped, async (event) => {
     if (!Array.isArray(paths) || paths.length === 0) return;
     const target = data.Target || data.target || "";
 
-    let page = null;
-    if (target === "fileEncDrop") {
-        page = encPages.file;
-    } else if (target === "folderEncDrop") {
-        page = encPages.folder;
-    } else if (currentTab === "tabFileEnc") {
-        page = encPages.file;
-    } else if (currentTab === "tabFolderEnc") {
-        page = encPages.folder;
-    }
-    if (!page) return;
+    if (target !== "encDrop" && currentTab !== "tabEnc") return;
 
     if (batch.open) {
-        // 批量面板展开时只接受当前页面的拖入，避免把任务加进看不见的页面。
-        if (page.kind === batch.page) await addBatchPaths(paths);
+        // 批量面板展开时拖入的内容全部进入当前队列。
+        await addBatchPaths(paths);
         return;
     }
     if (activeProgress) return;
 
-    page.src.value = paths[0];
-    // 拖入新的文件/文件夹后，进度条复位成初始的“就绪”状态
-    resetProgress(page);
-    switchTab(page.kind === "file" ? "tabFileEnc" : "tabFolderEnc");
+    // 拖入新路径：复位进度并重新判定删除风险。
+    setEncSource(paths[0]);
+    switchTab("tabEnc");
 });
 
-// 批量设置：两个开关持久化到 localStorage，控制对应页「批量」按钮的显隐。
-const initialBatchSettings = readBatchSettings();
-batchFileChk.checked = initialBatchSettings.file;
-batchFolderChk.checked = initialBatchSettings.folder;
-encPages.file.batch.classList.toggle("hidden", !initialBatchSettings.file);
-encPages.folder.batch.classList.toggle("hidden", !initialBatchSettings.folder);
-batchFileChk.addEventListener("change", syncBatchSettings);
-batchFolderChk.addEventListener("change", syncBatchSettings);
+// 批量入口固定开启，界面不再提供关闭开关。
+encPage.batch.classList.remove("hidden");
 
 batchGridBtn.addEventListener("click", () => {
     batch.view = "grid";
@@ -1587,16 +1571,17 @@ async function init() {
         const level = ["off", "trace", "debug", "normal"].includes(info.logLevel) ? info.logLevel : "normal";
         logLevelSelect.value = level;
         previousLogLevel = level;
-        batchFileChk.checked = !!info.batchFile;
-        batchFolderChk.checked = !!info.batchFolder;
-        encPages.file.batch.classList.toggle("hidden", !info.batchFile);
-        encPages.folder.batch.classList.toggle("hidden", !info.batchFolder);
+        // 批量入口固定显示，旧配置里的关闭状态在这里顺带纠正。
+        encPage.batch.classList.remove("hidden");
+        if (!info.batchFile || !info.batchFolder) {
+            await FolderService.SetBatchSettings(true, true);
+        }
         await applyPinTop(typeof info.alwaysOnTop === "boolean" ? info.alwaysOnTop : readPinTop());
     } else {
         langSelect.value = getLocale();
         await applyPinTop(readPinTop());
     }
-    refreshHint();
+    refreshLogPlaceholder();
     await loadStartupState();
     try {
         const state = await FolderService.GetPinState();

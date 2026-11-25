@@ -30,6 +30,7 @@ import DocLayout from "../../layouts/DocLayout.astro";
 	<ul>
 		<li>不要在 OneDrive 等同步目录、系统目录或程序安装目录使用。操作前请自行备份。</li>
 		<li>管理员运行标志开启后，每次程序启动都会弹出 UAC 确认。</li>
-		<li>内置保护会拒绝操作系统目录、程序自身目录和驱动器根目录，但不能替代人工判断。</li>
+		<li>内置保护会拒绝系统盘的 Windows、Program Files、Program Files (x86)、ProgramData、AMD、Recovery，以及 Users 根目录、程序自身目录和驱动器根目录；但用户个人文件夹允许加密。</li>
+		<li>个人文件夹即使勾选「删除原文件/文件夹」也不会被自动删除，程序会弹风险提示并取消勾选，需加密完成后手动删除。</li>
 	</ul>
 </DocLayout>

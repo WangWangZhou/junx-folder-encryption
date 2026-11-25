@@ -24,11 +24,11 @@ const (
 // AppConfig 是 config.jsonc 的完整内容。
 // 明文 PIN 不会写入此结构，pin 中只保存加密信封与状态字段。
 type AppConfig struct {
-	Version        int        `json:"version"`
-	Language       string     `json:"language"`
-	AlwaysOnTop    bool       `json:"alwaysOnTop"`
-	BatchFile      bool       `json:"batchFile"`
-	BatchFolder    bool       `json:"batchFolder"`
+	Version           int        `json:"version"`
+	Language          string     `json:"language"`
+	AlwaysOnTop       bool       `json:"alwaysOnTop"`
+	BatchFile         bool       `json:"batchFile"`
+	BatchFolder       bool       `json:"batchFolder"`
 	LogLevel          string     `json:"logLevel"`
 	LegacyMigrated    bool       `json:"legacyMigrated"`
 	LegacyPinMigrated bool       `json:"legacyPinMigrated"`
@@ -156,11 +156,11 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 
 func defaultAppConfig() AppConfig {
 	return AppConfig{
-		Version:        configFormatVersion,
-		Language:       "zh-CN",
-		AlwaysOnTop:    true,
-		BatchFile:      false,
-		BatchFolder:    false,
+		Version:           configFormatVersion,
+		Language:          "zh-CN",
+		AlwaysOnTop:       true,
+		BatchFile:         true,
+		BatchFolder:       true,
 		LogLevel:          "normal",
 		LegacyMigrated:    false,
 		LegacyPinMigrated: false,
@@ -262,10 +262,10 @@ func configTemplate(cfg AppConfig) string {
   // 窗口是否总在最前（播放器式置顶）
   "alwaysOnTop": %s,
 
-  // 是否启用文件加密批量任务
+  // 是否启用加密批量任务（兼容旧版字段，与 batchFolder 同步）
   "batchFile": %s,
 
-  // 是否启用文件夹加密批量任务
+  // 是否启用加密批量任务（兼容旧版字段，与 batchFile 同步）
   "batchFolder": %s,
 
   // 文件日志级别：off / trace / debug / normal

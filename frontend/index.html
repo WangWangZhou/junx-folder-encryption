@@ -32,8 +32,7 @@
     <div class="app-main">
     <div class="tabs" role="tablist">
         <button class="tab active" data-tab="tabHide" data-i18n="tab.hide" type="button">隐藏</button>
-        <button class="tab" data-tab="tabFileEnc" data-i18n="tab.fileEnc" type="button">加密</button>
-        <button class="tab" data-tab="tabFolderEnc" data-i18n="tab.folderEnc" type="button">文件夹加密</button>
+        <button class="tab" data-tab="tabEnc" data-i18n="tab.enc" type="button">加密</button>
         <button class="tab" data-tab="tabOther" data-i18n="tab.other" type="button">其他</button>
         <button class="tab" data-tab="tabGeneral" data-i18n="tab.general" type="button">常规</button>
         <button class="tab" data-tab="tabAbout" data-i18n="tab.about" type="button">关于</button>
@@ -84,63 +83,33 @@
             </section>
         </section>
 
-        <section class="panel enc" id="tabFileEnc">
-            <fieldset class="group drop-target" id="fileEncDrop" data-file-drop-target="file">
-                <legend data-i18n="group.fileEnc">文件加密</legend>
+        <section class="panel enc" id="tabEnc">
+            <fieldset class="group drop-target" id="encDrop" data-file-drop-target="enc">
+                <legend data-i18n="group.enc">加密</legend>
                 <div class="field-row">
-                    <label for="fileEncSrc" data-i18n="field.sourceFile">目标文件</label>
-                    <input id="fileEncSrc" type="text" placeholder="例如 D:\Private\报告.docx" data-i18n-placeholder="placeholder.filePath" autocomplete="off"/>
-                    <button id="fileEncPick" class="btn small" data-i18n="btn.browse" type="button">浏览…</button>
+                    <label for="encSrc" data-i18n="field.sourcePath">目标路径</label>
+                    <input id="encSrc" type="text" placeholder="例如 D:\Private\报告.docx 或 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.sourcePath" autocomplete="off"/>
+                    <button id="encPick" class="btn small" data-i18n="btn.browse" type="button">浏览…</button>
                 </div>
                 <div class="field-row">
-                    <label for="fileEncOut" data-i18n="field.outName">输出名称</label>
-                    <input id="fileEncOut" type="text" placeholder="选填，默认同源名，自动加 .junx" data-i18n-placeholder="placeholder.outName" autocomplete="off"/>
+                    <label for="encOut" data-i18n="field.outName">输出名称</label>
+                    <input id="encOut" type="text" placeholder="选填，默认同源名，自动加 .junx" data-i18n-placeholder="placeholder.outName" autocomplete="off"/>
                 </div>
                 <div class="field-row checkbox-row enc-check">
                     <label class="checkbox-label">
-                        <input id="fileEncDelete" type="checkbox"/>
-                        <span data-i18n="chk.deleteOriginalFile">加密后删除原文件，不放入回收站</span>
+                        <input id="encDelete" type="checkbox"/>
+                        <span data-i18n="chk.deleteOriginalPath">加密后删除原文件/文件夹，不放入回收站</span>
                     </label>
                 </div>
             </fieldset>
             <div class="progress-wrap">
-                <div class="progress-bar"><div class="progress-fill" id="fileEncFill"></div></div>
-                <span class="progress-text" id="fileEncText" data-i18n="progress.idle">就绪</span>
+                <div class="progress-bar"><div class="progress-fill" id="encFill"></div></div>
+                <span class="progress-text" id="encText" data-i18n="progress.idle">就绪</span>
             </div>
             <div class="actions">
-                <button id="fileEncBatch" class="btn batch-toggle hidden" data-i18n="btn.batch" type="button">批量</button>
-                <button id="fileEncStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
-                <button id="fileEncDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
-            </div>
-        </section>
-
-        <section class="panel enc" id="tabFolderEnc">
-            <fieldset class="group drop-target" id="folderEncDrop" data-file-drop-target="folder">
-                <legend data-i18n="group.folderEnc">文件夹加密</legend>
-                <div class="field-row">
-                    <label for="folderEncSrc" data-i18n="field.sourceFolder">源文件夹</label>
-                    <input id="folderEncSrc" type="text" placeholder="例如 D:\Private\我的文件夹" data-i18n-placeholder="placeholder.folderPath" autocomplete="off"/>
-                    <button id="folderEncPick" class="btn small" data-i18n="btn.browse" type="button">浏览…</button>
-                </div>
-                <div class="field-row">
-                    <label for="folderEncOut" data-i18n="field.outName">输出名称</label>
-                    <input id="folderEncOut" type="text" placeholder="选填，默认同目录名，自动加 .junx" data-i18n-placeholder="placeholder.outNameFolder" autocomplete="off"/>
-                </div>
-                <div class="field-row checkbox-row enc-check">
-                    <label class="checkbox-label">
-                        <input id="folderEncDelete" type="checkbox"/>
-                        <span data-i18n="chk.deleteOriginalFolder">加密后删除原文件夹，不放入回收站</span>
-                    </label>
-                </div>
-            </fieldset>
-            <div class="progress-wrap">
-                <div class="progress-bar"><div class="progress-fill" id="folderEncFill"></div></div>
-                <span class="progress-text" id="folderEncText" data-i18n="progress.idle">就绪</span>
-            </div>
-            <div class="actions">
-                <button id="folderEncBatch" class="btn batch-toggle hidden" data-i18n="btn.batch" type="button">批量</button>
-                <button id="folderEncStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
-                <button id="folderEncDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
+                <button id="encBatch" class="btn batch-toggle hidden" data-i18n="btn.batch" type="button">批量</button>
+                <button id="encStart" class="btn" data-i18n="btn.startEncrypt" type="button">开始加密</button>
+                <button id="encDecrypt" class="btn" data-i18n="btn.startDecrypt" type="button">开始解密</button>
             </div>
         </section>
 
@@ -168,7 +137,11 @@
         <section class="panel" id="tabGeneral">
             <fieldset class="group general-group">
                 <legend data-i18n="group.general">常规设置</legend>
-                <button id="quitBtn" class="btn small group-corner" data-i18n="btn.quit" data-i18n-title="tip.quit" title="" type="button">退出</button>
+                <button id="quitBtn" class="btn small group-corner icon-only" data-i18n-title="tip.quit" data-i18n-aria-label="btn.quit" title="" aria-label="退出" type="button">
+                    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                        <path d="M8 1.8v5.4M5.1 4.2a5 5 0 1 0 5.8 0" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
                 <div class="field-row">
                     <label for="langSelect" data-i18n="field.language">显示语言:</label>
                     <select id="langSelect" class="lang-select">
@@ -188,32 +161,17 @@
                     </label>
                     <span id="adminInfo" class="info-icon" data-i18n-title="tip.runAsAdmin" title="">ⓘ</span>
                 </div>
-                <div class="field-row checkbox-row pin-enable-row">
+                <div class="field-row checkbox-row pin-row">
                     <label class="checkbox-label">
                         <input id="pinEnableChk" type="checkbox"/>
                         <span data-i18n="chk.pin">打开密码</span>
                     </label>
-                    <span class="pin-fixed-hint" data-i18n="pin.fixedHint">4位数字</span>
-                    <span id="pinInfo" class="info-icon" data-i18n-title="tip.pin" title="">ⓘ</span>
-                </div>
-                <div id="pinSetupRow">
-                    <div class="field-row pin-setup-row">
-                        <div id="setupPinBoxes" class="pin-boxes"></div>
-                        <button id="pinClearBtn" class="btn small" data-i18n="btn.clear" type="button">清除</button>
-                    </div>
-                    <div class="field-row pin-setup-row">
-                        <div id="confirmPinBoxes" class="pin-boxes"></div>
-                        <button id="pinSaveBtn" class="btn small" data-i18n="btn.save" type="button">保存</button>
-                        <span id="pinSetupError" class="pin-setup-error"></span>
-                    </div>
-                </div>
-                <div class="field-row checkbox-row auto-lock-row">
                     <label class="checkbox-label" id="autoLockLabel">
                         <input id="autoLockChk" type="checkbox"/>
                         <span data-i18n="chk.autoLock">自动锁定</span>
                     </label>
-                    <span id="autoLockInfo" class="info-icon" data-i18n-title="tip.autoLock" title="">ⓘ</span>
                     <button id="manualLockBtn" class="btn small" data-i18n="btn.manualLock" type="button">手动锁定</button>
+                    <span id="pinInfo" class="info-icon" data-i18n-title="tip.pin" title="">ⓘ</span>
                 </div>
             </fieldset>
             <fieldset class="group config-group">
@@ -244,21 +202,6 @@
                     <button id="clearLogBtn" class="btn small" data-i18n="btn.clearLog" data-i18n-title="tip.clearLog" title="" type="button">清空日志</button>
                 </div>
             </fieldset>
-            <fieldset class="group">
-                <legend data-i18n="group.batch">批量设置</legend>
-                <div class="field-row checkbox-row batch-setting-row">
-                    <label class="checkbox-label">
-                        <input id="batchFileChk" type="checkbox"/>
-                        <span data-i18n="chk.batchFile">打开文件加密批量任务支持</span>
-                    </label>
-                </div>
-                <div class="field-row checkbox-row batch-setting-row">
-                    <label class="checkbox-label">
-                        <input id="batchFolderChk" type="checkbox"/>
-                        <span data-i18n="chk.batchFolder">打开文件夹加密批量任务支持</span>
-                    </label>
-                </div>
-            </fieldset>
             <div class="field-row general-reset-row">
                 <button id="resetConfigBtn" class="btn small" data-i18n="btn.resetConfig" data-i18n-title="tip.resetConfig" title="" type="button">恢复默认</button>
             </div>
@@ -269,7 +212,7 @@
                 <legend data-i18n="group.about">关于</legend>
                 <p class="about-title" data-i18n="about.title">文件夹隐藏工具 1.1.0</p>
                 <p data-i18n-html="about.hide"><b>文件夹隐藏（方案A / 方案B）</b>：只改目录名或权限，不加密内容。</p>
-                <p data-i18n-html="about.enc"><b>文件 / 文件夹加密</b>：AES-256-GCM 打包为 <code>.junx</code>，内部文件名与目录树一并加密。</p>
+                <p data-i18n-html="about.enc"><b>加密（文件 / 文件夹）</b>：AES-256-GCM 打包为 <code>.junx</code>，内部文件名与目录树一并加密。</p>
                 <p data-i18n-html="about.key"><b>密钥内置</b>：拿到本程序即可离线解密，适合防误看，不适合对抗专业取证。</p>
                 <p data-i18n-html="about.dec">解密固定输出到 <code>.junx</code> 所在目录；重名自动追加 <code>(2)(3)</code>，绝不覆盖。</p>
                 <p class="about-warn" data-i18n="about.warn">勾选“删除原文件”后不可恢复，请先备份。</p>
@@ -290,9 +233,24 @@
         </div>
     </div>
 
-    <div class="bottom">
-        <span class="hint" id="hint">文件夹隐藏：只改目录名与权限，不加密内容。</span>
     </div>
+</div>
+
+<div id="pinSetupOverlay" class="overlay hidden">
+    <div class="pin-dialog">
+        <div class="pin-dialog-title" data-i18n="pin.setupTitle">设置 4 位打开密码</div>
+        <div class="field-row pin-setup-row">
+            <div id="setupPinBoxes" class="pin-boxes pin-boxes-large"></div>
+        </div>
+        <div class="field-row pin-setup-row">
+            <div id="confirmPinBoxes" class="pin-boxes pin-boxes-large"></div>
+        </div>
+        <span id="pinSetupError" class="pin-setup-error"></span>
+        <div class="pin-dialog-actions">
+            <button id="pinClearBtn" class="btn small" data-i18n="btn.clear" type="button">清除</button>
+            <button id="pinSaveBtn" class="btn small" data-i18n="btn.save" type="button">保存</button>
+            <button id="pinCancelBtn" class="btn small" data-i18n="btn.cancel" type="button">取消</button>
+        </div>
     </div>
 </div>
 

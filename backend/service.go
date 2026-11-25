@@ -486,8 +486,27 @@ func (s *FolderService) EncryptFolderToJunx(path, outputName string, deleteOrigi
 	return s.encryptToJunx(path, junxFolderKind, outputName, deleteOriginal, locale)
 }
 
+// EncryptPath 自动识别路径类型并打包为 .junx。
+// 普通文件与文件夹共用同一入口；已是 .junx 的容器请使用 DecryptJunx。
+func (s *FolderService) EncryptPath(path, outputName string, deleteOriginal bool, locale string) error {
+	probe := probePath(path)
+	if !probe.Exists {
+		return s.fail(fmt.Errorf("路径不存在: %s", path))
+	}
+	switch probe.Kind {
+	case "junx":
+		return s.fail(fmt.Errorf("%s 已是加密容器，请使用解密", probe.Path))
+	case junxFileKind:
+		return s.encryptToJunx(probe.Path, junxFileKind, outputName, deleteOriginal, locale)
+	case junxFolderKind:
+		return s.encryptToJunx(probe.Path, junxFolderKind, outputName, deleteOriginal, locale)
+	default:
+		return s.fail(fmt.Errorf("不支持的路径类型: %s", probe.Path))
+	}
+}
+
 // DecryptJunx 通用解密：读取容器清单后自动决定还原单个文件还是整个目录树。
-// 两个加密页与批量解密都调用它，用户无需事先知道容器里装的是什么。
+// 加密页与批量解密都调用它，用户无需事先知道容器里装的是什么。
 func (s *FolderService) DecryptJunx(junxPath string) error {
 	return s.decryptFromJunx(junxPath)
 }
@@ -579,7 +598,10 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 	}
 
 	if deleteOriginal {
-		if askDeleteOriginal(locale, filepath.Base(absSrc), kind == junxFolderKind) {
+		if isUnderUserProfile(absSrc) {
+			// 后端兜底：个人文件夹即使前端状态被绕过也不自动删除。
+			s.appendLog("WARN", "高风险个人目录不允许自动删除，已保留原路径，请在加密完成后手动删除: "+absSrc)
+		} else if askDeleteOriginal(locale, filepath.Base(absSrc), kind == junxFolderKind) {
 			if err := os.RemoveAll(absSrc); err != nil {
 				return s.fail(fmt.Errorf("删除原路径失败: %w", err))
 			}
@@ -998,9 +1020,23 @@ func (s *FolderService) RemoveShortcutArrow() error {
 	return nil
 }
 
-// isProtectedPath 禁止操作系统目录、程序所在目录和驱动器根目录。
+// guardPathLower 把路径转成用于保护判定的小写绝对路径。
+// 解析符号链接可防止 junction 把个人目录指向系统目录后绕过检查。
+func guardPathLower(path string) string {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		abs = path
+	}
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = resolved
+	}
+	return strings.ToLower(filepath.Clean(abs))
+}
+
+// isProtectedPath 禁止系统盘关键目录、程序所在目录和驱动器根目录。
+// Users 根目录本身禁止加密，但其下的个人文件夹允许（由删除风险逻辑单独保护）。
 func isProtectedPath(path string) bool {
-	clean := strings.ToLower(filepath.Clean(path))
+	clean := guardPathLower(path)
 	sep := string(os.PathSeparator)
 
 	if exe, err := os.Executable(); err == nil {
@@ -1010,11 +1046,19 @@ func isProtectedPath(path string) bool {
 		}
 	}
 
+	drive := strings.TrimSpace(os.Getenv("SystemDrive"))
+	if drive == "" {
+		drive = "C:"
+	}
+	drive = strings.TrimSuffix(strings.ToLower(drive), sep)
+
 	protected := []string{
-		`C:\Windows`,
-		`C:\Program Files`,
-		`C:\Program Files (x86)`,
-		`C:\ProgramData`,
+		drive + sep + `windows`,
+		drive + sep + `program files`,
+		drive + sep + `program files (x86)`,
+		drive + sep + `programdata`,
+		drive + sep + `amd`,
+		drive + sep + `recovery`,
 	}
 	for _, item := range protected {
 		low := strings.ToLower(item)
@@ -1023,8 +1067,44 @@ func isProtectedPath(path string) bool {
 		}
 	}
 
+	// 只拒绝 Users 根目录，不拒绝 C:\Users\<个人文件夹>。
+	if clean == drive+sep+`users` {
+		return true
+	}
+
 	if len(clean) == 3 && clean[1] == ':' && clean[2] == '\\' {
 		return true
 	}
 	return false
+}
+
+// isUnderHome 判断路径是否位于给定个人目录（含其本身）。
+func isUnderHome(path, home string) bool {
+	clean := guardPathLower(path)
+	root := strings.ToLower(filepath.Clean(home))
+	return clean == root || strings.HasPrefix(clean, root+string(os.PathSeparator))
+}
+
+// isUnderUserProfile 判断路径是否位于当前用户的个人目录树。
+func isUnderUserProfile(path string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return false
+	}
+	return isUnderHome(path, home)
+}
+
+// DeleteRisk 是给前端展示的删除风险判定结果。
+type DeleteRisk struct {
+	HighRisk bool   `json:"highRisk"`
+	Reason   string `json:"reason"`
+}
+
+// CheckDeleteRisk 判断目标路径删除风险。
+// 个人文件夹允许加密，但不应自动删除；Reason 使用稳定标识，文案由前端本地化。
+func (s *FolderService) CheckDeleteRisk(path string) DeleteRisk {
+	if isUnderUserProfile(path) {
+		return DeleteRisk{HighRisk: true, Reason: "personal"}
+	}
+	return DeleteRisk{}
 }

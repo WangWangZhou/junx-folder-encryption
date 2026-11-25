@@ -94,6 +94,44 @@ export class ConfigInfo {
 }
 
 /**
+ * DeleteRisk 是给前端展示的删除风险判定结果。
+ */
+export class DeleteRisk {
+    /**
+     * Creates a new DeleteRisk instance.
+     * @param {Partial<DeleteRisk>} [$$source = {}] - The source object to create the DeleteRisk.
+     */
+    constructor($$source = {}) {
+        if (!("highRisk" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["highRisk"] = false;
+        }
+        if (!("reason" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["reason"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DeleteRisk instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DeleteRisk}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DeleteRisk(/** @type {Partial<DeleteRisk>} */($$parsedSource));
+    }
+}
+
+/**
  * DropFiles 是拖放事件载荷。Target 为带 data-file-drop-target 的元素 id。
  */
 export class DropFiles {

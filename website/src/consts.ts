@@ -14,8 +14,7 @@ export const NAV_GROUPS = [
 		title: "指南",
 		items: [
 			{ title: "文件夹隐藏使用", href: "/guide/folder-hide/" },
-			{ title: "文件加密使用", href: "/guide/file-encrypt/" },
-			{ title: "文件夹加密使用", href: "/guide/folder-encrypt/" },
+			{ title: "加密使用", href: "/guide/file-encrypt/" },
 		],
 	},
 	{
