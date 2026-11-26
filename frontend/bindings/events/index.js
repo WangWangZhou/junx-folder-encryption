@@ -7,6 +7,11 @@
 import "../github.com/wailsapp/wails/v3/internal/eventcreate.js";
 
 /**
+ * Name of the custom event "batch-files-dropped".
+ */
+export const BatchFilesDropped = "batch-files-dropped";
+
+/**
  * Name of the custom event "files-dropped".
  */
 export const FilesDropped = "files-dropped";

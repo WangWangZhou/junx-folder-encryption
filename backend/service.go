@@ -74,6 +74,73 @@ func (s *FolderService) Quit() {
 	}
 }
 
+// batchSeedMu 保护批量窗口的种子任务，避免主窗口与批量窗口并发读写。
+var batchSeedMu sync.Mutex
+
+// batchSeed 保存主窗口移交的未开始任务路径，批量窗口启动后一次性取走。
+var batchSeed []string
+
+// OpenBatchWindow 显示批量窗口，并把主窗口移交的路径暂存为种子。
+// 主窗口随后由前端最小化；批量窗口由 main.go 预创建，这里只做显示与聚焦。
+func (s *FolderService) OpenBatchWindow(paths []string) error {
+	batchSeedMu.Lock()
+	batchSeed = append([]string(nil), paths...)
+	batchSeedMu.Unlock()
+
+	app := application.Get()
+	if app == nil {
+		return fmt.Errorf("应用尚未就绪")
+	}
+	batch, ok := app.Window.GetByName("batch")
+	if !ok {
+		return fmt.Errorf("批量窗口未创建")
+	}
+	batch.Show()
+	batch.SetAlwaysOnTop(true)
+	batch.Focus()
+	return nil
+}
+
+// TakeBatchSeed 取出并清空主窗口移交的种子路径，避免批量窗口重复加载。
+func (s *FolderService) TakeBatchSeed() []string {
+	batchSeedMu.Lock()
+	defer batchSeedMu.Unlock()
+	result := append([]string(nil), batchSeed...)
+	batchSeed = nil
+	return result
+}
+
+// SetBatchAlwaysOnTop 切换批量窗口置顶状态，图钉按钮调用。
+func (s *FolderService) SetBatchAlwaysOnTop(enabled bool) error {
+	app := application.Get()
+	if app == nil {
+		return fmt.Errorf("应用尚未就绪")
+	}
+	batch, ok := app.Window.GetByName("batch")
+	if !ok {
+		return fmt.Errorf("批量窗口未创建")
+	}
+	batch.SetAlwaysOnTop(enabled)
+	return nil
+}
+
+// RestoreMainWindow 从最小化状态还原主窗口并置前，批量窗口关闭时调用。
+func (s *FolderService) RestoreMainWindow() error {
+	app := application.Get()
+	if app == nil {
+		return fmt.Errorf("应用尚未就绪")
+	}
+	main, ok := app.Window.GetByName("main")
+	if !ok {
+		return fmt.Errorf("主窗口未创建")
+	}
+	if main.IsMinimised() {
+		main.UnMinimise()
+	}
+	main.Focus()
+	return nil
+}
+
 // pinState 读取当前 PIN 状态；错误或缺失配置按未启用处理。
 func (s *FolderService) pinState() PinState {
 	s.mu.Lock()
@@ -478,18 +545,28 @@ func (s *FolderService) DecryptFolderByACL(path string) error {
 // EncryptFileToJunx 把单个文件打包为 .junx。
 // outputName 为空时使用源文件名；勾选 deleteOriginal 时在校验通过后永久删除源文件。
 func (s *FolderService) EncryptFileToJunx(path, outputName string, deleteOriginal bool, locale string) error {
-	return s.encryptToJunx(path, junxFileKind, outputName, deleteOriginal, locale)
+	return s.encryptToJunx("", path, junxFileKind, outputName, "", deleteOriginal, locale)
 }
 
 // EncryptFolderToJunx 把整个目录树打包为 .junx，目录名与内部文件名一并加密。
 func (s *FolderService) EncryptFolderToJunx(path, outputName string, deleteOriginal bool, locale string) error {
-	return s.encryptToJunx(path, junxFolderKind, outputName, deleteOriginal, locale)
+	return s.encryptToJunx("", path, junxFolderKind, outputName, "", deleteOriginal, locale)
 }
 
 // EncryptPath 自动识别路径类型并打包为 .junx。
 // 普通文件与文件夹共用同一入口；已是 .junx 的容器请使用 DecryptJunx。
 func (s *FolderService) EncryptPath(path, outputName string, deleteOriginal bool, locale string) error {
-	probe := probePath(path)
+	return s.encryptPath("", path, outputName, "", deleteOriginal, locale)
+}
+
+// EncryptPathEx 与 EncryptPath 相同，但支持自定义输出目录与批量任务 ID。
+// outputDir 为空时输出到源文件所在目录；taskID 用于并发进度事件归属。
+func (s *FolderService) EncryptPathEx(taskID, path, outputName, outputDir string, deleteOriginal bool, locale string) error {
+	return s.encryptPath(taskID, path, outputName, outputDir, deleteOriginal, locale)
+}
+
+func (s *FolderService) encryptPath(taskID, path, outputName, outputDir string, deleteOriginal bool, locale string) error {
+	probe := probePathWithOutput(path, outputDir)
 	if !probe.Exists {
 		return s.fail(fmt.Errorf("路径不存在: %s", path))
 	}
@@ -497,9 +574,9 @@ func (s *FolderService) EncryptPath(path, outputName string, deleteOriginal bool
 	case "junx":
 		return s.fail(fmt.Errorf("%s 已是加密容器，请使用解密", probe.Path))
 	case junxFileKind:
-		return s.encryptToJunx(probe.Path, junxFileKind, outputName, deleteOriginal, locale)
+		return s.encryptToJunx(taskID, probe.Path, junxFileKind, outputName, outputDir, deleteOriginal, locale)
 	case junxFolderKind:
-		return s.encryptToJunx(probe.Path, junxFolderKind, outputName, deleteOriginal, locale)
+		return s.encryptToJunx(taskID, probe.Path, junxFolderKind, outputName, outputDir, deleteOriginal, locale)
 	default:
 		return s.fail(fmt.Errorf("不支持的路径类型: %s", probe.Path))
 	}
@@ -508,11 +585,17 @@ func (s *FolderService) EncryptPath(path, outputName string, deleteOriginal bool
 // DecryptJunx 通用解密：读取容器清单后自动决定还原单个文件还是整个目录树。
 // 加密页与批量解密都调用它，用户无需事先知道容器里装的是什么。
 func (s *FolderService) DecryptJunx(junxPath string) error {
-	return s.decryptFromJunx(junxPath)
+	return s.decryptFromJunx("", junxPath, "")
+}
+
+// DecryptJunxToDir 与 DecryptJunx 相同，但支持自定义输出目录与批量任务 ID。
+// outputDir 为空时输出到 .junx 所在目录。
+func (s *FolderService) DecryptJunxToDir(taskID, junxPath, outputDir string) error {
+	return s.decryptFromJunx(taskID, junxPath, outputDir)
 }
 
 // encryptToJunx 加密主流程：扫描 → 打包 → 封装 → 写盘 → 回读校验 → 可选删除源。
-func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOriginal bool, locale string) error {
+func (s *FolderService) encryptToJunx(taskID, src, kind, outputName, outputDir string, deleteOriginal bool, locale string) error {
 	if err := s.guardUnlocked(); err != nil {
 		return err
 	}
@@ -535,11 +618,15 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 		return s.fail(fmt.Errorf("不是文件夹: %s", src))
 	}
 
+	preparedDir, err := s.prepareOutputDir(outputDir)
+	if err != nil {
+		return s.fail(err)
+	}
 	absSrc, err := filepath.Abs(src)
 	if err != nil {
 		return s.fail(err)
 	}
-	outPath, err := junxOutputPath(absSrc, outputName)
+	outPath, err := junxOutputPathIn(absSrc, outputName, preparedDir)
 	if err != nil {
 		return s.fail(err)
 	}
@@ -554,7 +641,7 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 	}
 	s.debug(fmt.Sprintf("加密准备: kind=%s src=%s out=%s", kind, absSrc, outPath))
 
-	emit := s.junxEmitter()
+	emit := s.junxEmitter(taskID)
 	emit("scan", 0, filepath.Base(absSrc))
 	payload, err := buildJunxPayload(absSrc, kind, emit)
 	if err != nil {
@@ -616,7 +703,7 @@ func (s *FolderService) encryptToJunx(src, kind, outputName string, deleteOrigin
 }
 
 // decryptFromJunx 解密主流程：读容器 → 校验类型 → 按 manifest 重建。
-func (s *FolderService) decryptFromJunx(junxPath string) error {
+func (s *FolderService) decryptFromJunx(taskID, junxPath, outputDir string) error {
 	if err := s.guardUnlocked(); err != nil {
 		return err
 	}
@@ -634,12 +721,20 @@ func (s *FolderService) decryptFromJunx(junxPath string) error {
 	if !info.Mode().IsRegular() {
 		return s.fail(fmt.Errorf("不是 .junx 文件: %s", junxPath))
 	}
+	preparedDir, err := s.prepareOutputDir(outputDir)
+	if err != nil {
+		return s.fail(err)
+	}
 	absPath, err := filepath.Abs(junxPath)
 	if err != nil {
 		return s.fail(err)
 	}
+	destDir := preparedDir
+	if destDir == "" {
+		destDir = filepath.Dir(absPath)
+	}
 
-	emit := s.junxEmitter()
+	emit := s.junxEmitter(taskID)
 	emit("scan", 0, filepath.Base(absPath))
 	data, err := os.ReadFile(absPath)
 	if err != nil {
@@ -658,7 +753,7 @@ func (s *FolderService) decryptFromJunx(junxPath string) error {
 	}
 
 	emit("extract", 50, manifest.Name)
-	target, err := unpackJunxPayload(manifest, body, filepath.Dir(absPath), emit)
+	target, err := unpackJunxPayload(manifest, body, destDir, emit)
 	if err != nil {
 		return s.fail(err)
 	}
@@ -692,11 +787,31 @@ func verifyJunxFile(path string, payload *junxPayload) error {
 	return validateJunxManifest(manifest, body)
 }
 
+// prepareOutputDir 校验并准备输出目录；空值表示沿用默认目录。
+// 目录不存在时自动创建，系统保护目录直接拒绝。
+func (s *FolderService) prepareOutputDir(outputDir string) (string, error) {
+	trimmed := strings.TrimSpace(outputDir)
+	if trimmed == "" {
+		return "", nil
+	}
+	abs, err := filepath.Abs(trimmed)
+	if err != nil {
+		return "", fmt.Errorf("输出目录无效: %w", err)
+	}
+	if isProtectedPath(abs) {
+		return "", fmt.Errorf("拒绝操作系统目录或程序自身目录: %s", abs)
+	}
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return "", fmt.Errorf("创建输出目录失败: %w", err)
+	}
+	return abs, nil
+}
+
 // junxEmitter 返回向前端推送 folder-progress 事件的回调；无 GUI 时静默跳过。
-func (s *FolderService) junxEmitter() junxProgressFunc {
+func (s *FolderService) junxEmitter(taskID string) junxProgressFunc {
 	return func(phase string, percent int, current string) {
 		if app := application.Get(); app != nil {
-			app.Event.Emit("folder-progress", JunxProgress{Percent: percent, Phase: phase, Current: current})
+			app.Event.Emit("folder-progress", JunxProgress{TaskID: taskID, Percent: percent, Phase: phase, Current: current})
 		}
 	}
 }

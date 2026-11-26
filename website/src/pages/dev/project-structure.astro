@@ -44,11 +44,14 @@ import DocLayout from "../../layouts/DocLayout.astro";
 │       ├── windowfront_windows.go  # Windows：模拟 ALT 键解除前台锁定
 │       └── windowfront_other.go    # 非 Windows 退化实现
 ├── frontend/
-│   ├── index.html                # 五个一级标签、方案二级标签、加密页与批量面板
+│   ├── index.html                # 主窗口：五个一级标签、方案二级标签与加密页
+│   ├── batch.html                # 批量窗口：左侧操作区与右侧双标签队列
 │   ├── src/
-│   │   ├── main.js               # 事件绑定、服务调用、日志渲染、批量队列
+│   │   ├── main.js               # 主窗口事件绑定、服务调用与日志渲染
+│   │   ├── batch.js              # 批量窗口：队列、双标签与进度
 │   │   └── i18n.js               # 轻量 i18n 与三语字典
-│   ├── public/style.css          # 浅灰经典界面样式
+│   ├── public/style.css          # 主窗口浅灰经典界面样式
+│   ├── public/batch.css          # 批量窗口双栏布局样式
 │   ├── bindings/                 # wails3 生成的类型绑定（勿手改）
 │   └── dist/                     # 前端构建产物
 ├── website/                      # 独立的 Astro 文档站（Cloudflare Workers）

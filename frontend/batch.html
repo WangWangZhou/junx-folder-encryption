@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>批量任务</title>
+    <link rel="stylesheet" href="/batch.css"/>
+</head>
+<body>
+<div class="batch-app">
+    <section class="batch-left">
+        <div class="batch-left-head">
+            <span class="batch-brand" data-i18n="batch.windowTitle">批量任务</span>
+            <button id="batchPinBtn" class="pin-btn" type="button" aria-pressed="true" data-i18n-title="tip.alwaysOnTop" title="">
+                <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true">
+                    <path d="M6 1a4 4 0 0 0-4 4c0 3 4 6 4 6s4-3 4-6a4 4 0 0 0-4-4Zm0 2.5a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z" fill="currentColor"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="batch-modes" role="tablist">
+            <button id="batchEncryptMode" class="mode-btn active" type="button" data-i18n="batch.modeEncrypt">🔒加密</button>
+            <button id="batchDecryptMode" class="mode-btn" type="button" data-i18n="batch.modeDecrypt">🔓解密</button>
+        </div>
+
+        <fieldset class="batch-group">
+            <legend data-i18n="batch.source">目标路径</legend>
+            <div id="batchDrop" class="batch-drop" data-file-drop-target="batchDrop">
+                <span data-i18n="batch.dropHint">把文件或文件夹拖到这里</span>
+            </div>
+            <div class="batch-field-row">
+                <input id="batchPath" type="text" data-i18n-placeholder="batch.pathPlaceholder" placeholder="文件或文件夹路径" autocomplete="off"/>
+                <button id="batchBrowse" class="btn small" type="button" data-i18n="btn.browse">浏览…</button>
+            </div>
+            <div class="batch-add-row">
+                <button id="batchAdd" class="btn small" type="button" data-i18n="batch.addShort">加入</button>
+                <span id="batchAddHint" class="batch-add-hint"></span>
+            </div>
+            <div class="batch-field-row">
+                <input id="batchOutDir" type="text" data-i18n-placeholder="batch.outDirPlaceholder" placeholder="选填，默认源文件所在目录" autocomplete="off"/>
+                <button id="batchOutDirBrowse" class="btn small" type="button" data-i18n-title="batch.outDirBrowse" title="选择输出目录">浏览…</button>
+            </div>
+            <label class="checkbox-label batch-delete-row">
+                <input id="batchDelete" type="checkbox"/>
+                <span data-i18n="chk.deleteOriginalPath">加密后删除原文件/文件夹，不放入回收站</span>
+            </label>
+        </fieldset>
+
+        <div class="batch-actions">
+            <button id="batchRun" class="btn" type="button">开始加密</button>
+            <button id="batchBack" class="btn" type="button" data-i18n="btn.backToMain">返回主窗口</button>
+        </div>
+    </section>
+
+    <section class="batch-right">
+        <div class="queue-head">
+            <div class="queue-tabs" role="tablist">
+                <button id="queuePendingTab" class="queue-tab active" type="button" data-status="pending">
+                    <span data-i18n="batch.queuePending">未开始</span><span id="queuePendingCount" class="queue-count">0</span>
+                </button>
+                <button id="queueRunningTab" class="queue-tab" type="button" data-status="running">
+                    <span data-i18n="batch.queueRunning">进行中</span><span id="queueRunningCount" class="queue-count">0</span>
+                </button>
+                <button id="queueDoneTab" class="queue-tab" type="button" data-status="done">
+                    <span data-i18n="batch.queueDone">已完成</span><span id="queueDoneCount" class="queue-count">0</span>
+                </button>
+            </div>
+            <button id="queueSweepBtn" class="queue-sweep-btn" type="button" data-i18n-title="batch.sweepPendingTip" data-i18n-aria-label="batch.sweepPendingTip" title="" aria-label="清扫">
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+                    <g transform="rotate(35 8 8)" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M8 2.2V8" />
+                        <path d="M5.6 8h4.8l-1 5.2H6.6z" />
+                        <path d="M7.1 9.7v3.1M8.9 9.7v3.1" />
+                    </g>
+                </svg>
+            </button>
+        </div>
+        <div id="queueList" class="queue-list"></div>
+    </section>
+</div>
+<script type="module" src="/src/batch.js"></script>
+</body>
+</html>

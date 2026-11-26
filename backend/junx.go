@@ -444,7 +444,19 @@ func safeRelPath(rel string) (string, error) {
 
 // junxOutputPath 计算 .junx 输出路径：默认与源同目录、同名为基础，自动补扩展名。
 func junxOutputPath(src, outputName string) (string, error) {
+	return junxOutputPathIn(src, outputName, "")
+}
+
+// junxOutputPathIn 支持自定义输出目录；outputDir 为空时保持与源同目录。
+func junxOutputPathIn(src, outputName, outputDir string) (string, error) {
 	dir := filepath.Dir(src)
+	if trimmed := strings.TrimSpace(outputDir); trimmed != "" {
+		abs, err := filepath.Abs(trimmed)
+		if err != nil {
+			return "", fmt.Errorf("输出目录无效: %w", err)
+		}
+		dir = abs
+	}
 	name := strings.TrimSpace(outputName)
 	if name == "" {
 		name = filepath.Base(src)

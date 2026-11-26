@@ -48,12 +48,14 @@ import DocLayout from "../../layouts/DocLayout.astro";
 
 	<h2>批量任务</h2>
 	<ul>
-		<li>开关状态存入 <code>config.jsonc</code>；开启后窗口从 <code>414×400</code> 扩为 <code>576×470</code>，左侧出现 156px 批量面板。</li>
-		<li>首个任务决定批量性质：普通文件 / 文件夹 → 加密任务，<code>.junx</code> → 解密任务；之后类型不符的条目一律拒绝。</li>
-		<li>添加前用后端只读接口 <code>ProbePaths</code> 校验：路径存在、类型（file / folder / junx）、重复、目标 <code>.junx</code> 已存在、父子路径包含关系。</li>
+		<li>批量任务运行在独立 WebView 窗口：主窗口点「批量」后调用 <code>OpenBatchWindow</code>，把当前未开始的目标路径作为种子暂存，主窗口最小化，批量窗口显示并置顶。</li>
+		<li>批量窗口预创建并隐藏，关闭时只 <code>Hide()</code> 复用并还原主窗口；拖放事件用独立的 <code>batch-files-dropped</code> 与主窗口区分。</li>
+		<li>六个队列按 <code>encrypt/decrypt × pending/running/done</code> 区分；拖入路径按类型自动分流，模式按钮只切换当前查看与运行的队列，不再限制添加。</li>
+		<li>添加前用后端只读接口 <code>ProbePaths(paths, outputDir)</code> 校验：路径存在、类型（file / folder / junx）、重复、目标 <code>.junx</code> 已存在、父子路径包含关系。</li>
 		<li>加密队列不支持路径嵌套：先加父路径再拖入其子路径会被拒绝；先加子再加入父会弹原生询问，确认后合并为父路径任务。</li>
-		<li>子任务串行执行；运行期间锁定当前页面。总进度公式为 <code>(已完成数 + 当前任务进度/100) / 启动时冻结的任务总数</code>。</li>
-		<li>删除任务只移除队列项，不触碰磁盘文件；失败任务保留并标红。</li>
+		<li>每个模式内部串行执行，但加密与解密可以同时运行；进度事件携带 <code>TaskID</code>，避免并发时串进度。</li>
+		<li>输出目录对两种模式都生效，后端 <code>prepareOutputDir</code> 自动创建不存在的目录并拒绝系统保护目录；输出名仅加密任务使用。</li>
+		<li>任务完成后不移除，而是记入当前模式的「已完成」标签并保留结果；删除任务只移除队列项，不触碰磁盘文件。</li>
 	</ul>
 
 	<h2>配置与日志</h2>

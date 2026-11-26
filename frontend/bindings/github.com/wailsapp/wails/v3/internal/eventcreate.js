@@ -12,6 +12,7 @@ import * as backend$0 from "../../../../../folderhide/backend/models.js";
 
 function configure() {
     Object.freeze(Object.assign($Create.Events, {
+        "batch-files-dropped": $$createType0,
         "files-dropped": $$createType0,
         "folder-progress": $$createType1,
     }));

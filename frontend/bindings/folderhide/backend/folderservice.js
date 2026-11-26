@@ -102,6 +102,18 @@ export function DecryptJunx(junxPath) {
 }
 
 /**
+ * DecryptJunxToDir 与 DecryptJunx 相同，但支持自定义输出目录与批量任务 ID。
+ * outputDir 为空时输出到 .junx 所在目录。
+ * @param {string} taskID
+ * @param {string} junxPath
+ * @param {string} outputDir
+ * @returns {$CancellablePromise<void>}
+ */
+export function DecryptJunxToDir(taskID, junxPath, outputDir) {
+    return $Call.ByID(2140577193, taskID, junxPath, outputDir);
+}
+
+/**
  * DisablePin 在当前已解锁会话中关闭打开密码。
  * locale 由前端传入，用于选择"密码已删除"原生提示框的三语文案。
  * @param {string} locale
@@ -171,6 +183,21 @@ export function EncryptPath(path, outputName, deleteOriginal, locale) {
 }
 
 /**
+ * EncryptPathEx 与 EncryptPath 相同，但支持自定义输出目录与批量任务 ID。
+ * outputDir 为空时输出到源文件所在目录；taskID 用于并发进度事件归属。
+ * @param {string} taskID
+ * @param {string} path
+ * @param {string} outputName
+ * @param {string} outputDir
+ * @param {boolean} deleteOriginal
+ * @param {string} locale
+ * @returns {$CancellablePromise<void>}
+ */
+export function EncryptPathEx(taskID, path, outputName, outputDir, deleteOriginal, locale) {
+    return $Call.ByID(694442262, taskID, path, outputName, outputDir, deleteOriginal, locale);
+}
+
+/**
  * GetConfigInfo 返回前端展示用的配置摘要。
  * @returns {$CancellablePromise<$models.ConfigInfo>}
  */
@@ -224,6 +251,16 @@ export function MigrateLegacyConfig(language, alwaysOnTop, batchFile, batchFolde
 }
 
 /**
+ * OpenBatchWindow 显示批量窗口，并把主窗口移交的路径暂存为种子。
+ * 主窗口随后由前端最小化；批量窗口由 main.go 预创建，这里只做显示与聚焦。
+ * @param {string[]} paths
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenBatchWindow(paths) {
+    return $Call.ByID(2565241973, paths);
+}
+
+/**
  * OpenConfigFile 用默认文本编辑器打开 config.jsonc。
  * @returns {$CancellablePromise<void>}
  */
@@ -258,11 +295,13 @@ export function OpenLogFolder() {
 /**
  * ProbePaths 批量探测拖入的路径，不修改任何文件。
  * 与加密/解密接口不同，这里允许在未解锁状态下调用：它只读取名称与文件头。
+ * outputDir 用于按用户选择的输出目录提前判断加密产物是否已存在。
  * @param {string[]} paths
+ * @param {string} outputDir
  * @returns {$CancellablePromise<$models.PathProbe[]>}
  */
-export function ProbePaths(paths) {
-    return $Call.ByID(3161538085, paths).then(/** @type {($result: any) => any} */(($result) => {
+export function ProbePaths(paths, outputDir) {
+    return $Call.ByID(3161538085, paths, outputDir).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType6($result);
     }));
 }
@@ -303,6 +342,14 @@ export function ResetConfig() {
 }
 
 /**
+ * RestoreMainWindow 从最小化状态还原主窗口并置前，批量窗口关闭时调用。
+ * @returns {$CancellablePromise<void>}
+ */
+export function RestoreMainWindow() {
+    return $Call.ByID(1680116466);
+}
+
+/**
  * SetAlwaysOnTop 持久化窗口置顶状态；实际窗口状态由前端设置。
  * @param {boolean} enabled
  * @returns {$CancellablePromise<void>}
@@ -332,6 +379,15 @@ export function SetAutoLock(enabled, locale) {
  */
 export function SetAutoStart(enabled) {
     return $Call.ByID(496378846, enabled);
+}
+
+/**
+ * SetBatchAlwaysOnTop 切换批量窗口置顶状态，图钉按钮调用。
+ * @param {boolean} enabled
+ * @returns {$CancellablePromise<void>}
+ */
+export function SetBatchAlwaysOnTop(enabled) {
+    return $Call.ByID(2908469394, enabled);
 }
 
 /**
@@ -385,6 +441,16 @@ export function ShowDesktopIcons() {
  */
 export function ShowHiddenFiles() {
     return $Call.ByID(1655770037);
+}
+
+/**
+ * TakeBatchSeed 取出并清空主窗口移交的种子路径，避免批量窗口重复加载。
+ * @returns {$CancellablePromise<string[]>}
+ */
+export function TakeBatchSeed() {
+    return $Call.ByID(1283068937).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
 }
 
 /**

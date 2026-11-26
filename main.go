@@ -24,7 +24,14 @@ func init() {
 	application.RegisterEvent[string]("folder-log")
 	application.RegisterEvent[backend.JunxProgress]("folder-progress")
 	application.RegisterEvent[backend.DropFiles]("files-dropped")
+	application.RegisterEvent[backend.DropFiles]("batch-files-dropped")
 }
+
+// 窗口名常量：主窗口与批量窗口共用，供 Go 侧互相控制。
+const (
+	mainWindowName  = "main"
+	batchWindowName = "batch"
+)
 
 // trayText 保存系统托盘的标签与菜单文案。
 type trayText struct {
@@ -77,6 +84,8 @@ func main() {
 	var saveTimer *time.Timer
 	// 提前声明，供 SingleInstance 回调引用；具体逻辑在窗口创建后赋值。
 	var restoreAndShow func()
+	// 批量窗口关闭时还原主窗口，供 hook 与外部方法共用。
+	var restoreMainWindow func()
 
 	app := application.New(application.Options{
 		Name:        "文件夹隐藏工具",
@@ -134,6 +143,7 @@ func main() {
 	stateMu.Unlock()
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             mainWindowName,
 		Title:            "文件夹隐藏工具 v1.1.0",
 		Width:            bounds.Width,
 		Height:           bounds.Height,
@@ -187,6 +197,15 @@ func main() {
 		stateMu.Unlock()
 	}
 
+	// 还原主窗口：最小化时先恢复，再解除 Windows 前台锁定并置前。
+	// 批量窗口关闭与托盘点击都会走这里。
+	restoreMainWindow = func() {
+		if window.IsMinimised() {
+			window.UnMinimise()
+		}
+		windowfront.BringToFront(window)
+	}
+
 	// 恢复窗口到记忆位置并显示。托盘点击、托盘菜单与单实例回调共用此入口，
 	// 刻意不调用 SystemTray.PositionWindow —— 后者会把窗口强制移到托盘右下角。
 	restoreAndShow = func() {
@@ -205,7 +224,7 @@ func main() {
 		// 用 windowfront.BringToFront 而非直接 Show().Focus()：单实例回调运行在
 		// 后台 goroutine，缺少用户输入上下文，Windows 前台锁定会拒绝激活，
 		// 导致窗口只出现在任务栏而不弹到最前。该函数会先解除前台锁定。
-		windowfront.BringToFront(window)
+		restoreMainWindow()
 	}
 
 	// 拖动与缩放时更新内存状态并延时落盘。
@@ -250,7 +269,7 @@ func main() {
 	systray.SetLabel(text.label)
 	systray.SetMenu(menu)
 	systray.OnClick(func() {
-		if window.IsVisible() {
+		if window.IsVisible() && !window.IsMinimised() {
 			window.Hide()
 			return
 		}
@@ -268,6 +287,38 @@ func main() {
 			target = details.ElementID
 		}
 		app.Event.Emit("files-dropped", backend.DropFiles{Paths: files, Target: target})
+	})
+
+	// 批量窗口：预创建并隐藏，点「批量」时由后端服务显示。默认置顶，
+	// 前端图钉按钮通过 SetBatchAlwaysOnTop 切换。v3 中关闭用 Hide 复用窗口。
+	batchWindow := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             batchWindowName,
+		Title:            "批量任务",
+		Width:            860,
+		Height:           520,
+		MinWidth:         720,
+		MinHeight:        420,
+		BackgroundColour: application.NewRGB(240, 240, 240),
+		URL:              "/batch.html",
+		AlwaysOnTop:      true,
+		EnableFileDrop:   true,
+		Hidden:           true,
+	})
+	batchWindow.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		batchWindow.Hide()
+		restoreMainWindow()
+		e.Cancel()
+	})
+	batchWindow.OnWindowEvent(events.Common.WindowFilesDropped, func(event *application.WindowEvent) {
+		files := event.Context().DroppedFiles()
+		if len(files) == 0 {
+			return
+		}
+		target := ""
+		if details := event.Context().DropTargetDetails(); details != nil {
+			target = details.ElementID
+		}
+		app.Event.Emit("batch-files-dropped", backend.DropFiles{Paths: files, Target: target})
 	})
 
 	if err := app.Run(); err != nil {

@@ -183,6 +183,14 @@ export class JunxProgress {
      * @param {Partial<JunxProgress>} [$$source = {}] - The source object to create the JunxProgress.
      */
     constructor($$source = {}) {
+        if (!("TaskID" in $$source)) {
+            /**
+             * 批量任务 ID；单任务调用为空，前端据此区分并发进度流
+             * @member
+             * @type {string}
+             */
+            this["TaskID"] = "";
+        }
         if (!("Percent" in $$source)) {
             /**
              * @member

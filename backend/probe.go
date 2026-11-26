@@ -22,10 +22,11 @@ type PathProbe struct {
 
 // ProbePaths 批量探测拖入的路径，不修改任何文件。
 // 与加密/解密接口不同，这里允许在未解锁状态下调用：它只读取名称与文件头。
-func (s *FolderService) ProbePaths(paths []string) []PathProbe {
+// outputDir 用于按用户选择的输出目录提前判断加密产物是否已存在。
+func (s *FolderService) ProbePaths(paths []string, outputDir string) []PathProbe {
 	probes := make([]PathProbe, 0, len(paths))
 	for _, path := range paths {
-		probe := probePath(path)
+		probe := probePathWithOutput(path, outputDir)
 		s.trace(fmt.Sprintf("路径探测: %s -> kind=%s container=%s outputExists=%t", probe.Path, probe.Kind, probe.ContainerKind, probe.OutputExists))
 		probes = append(probes, probe)
 	}
@@ -33,6 +34,10 @@ func (s *FolderService) ProbePaths(paths []string) []PathProbe {
 }
 
 func probePath(path string) PathProbe {
+	return probePathWithOutput(path, "")
+}
+
+func probePathWithOutput(path, outputDir string) PathProbe {
 	probe := PathProbe{Path: strings.TrimSpace(path), Kind: "missing"}
 	if probe.Path == "" {
 		return probe
@@ -63,7 +68,7 @@ func probePath(path string) PathProbe {
 	}
 
 	if probe.Kind == "file" || probe.Kind == "folder" {
-		if output, outErr := junxOutputPath(probe.Path, ""); outErr == nil {
+		if output, outErr := junxOutputPathIn(probe.Path, "", outputDir); outErr == nil {
 			probe.OutputPath = output
 			probe.OutputExists = junxPathExists(output)
 		}

@@ -12,6 +12,7 @@ import type * as backend$0 from "../../../../../folderhide/backend/models.js";
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "batch-files-dropped": backend$0.DropFiles;
             "files-dropped": backend$0.DropFiles;
             "folder-log": string;
             "folder-progress": backend$0.JunxProgress;

@@ -150,8 +150,6 @@ pinTopBtn.addEventListener("click", () => {
 
 // 一级标签切换：面板互斥显示，常规/关于页隐藏日志区腾出空间。
 function switchTab(tabId) {
-    // 批量运行期间锁定在加密页，避免队列跑在后台却看不到进度。
-    if (batch.running && tabId !== "tabEnc") return;
     document.querySelectorAll(".tab").forEach((item) => {
         item.classList.toggle("active", item.dataset.tab === tabId);
     });
@@ -162,16 +160,13 @@ function switchTab(tabId) {
     refreshLogPlaceholder();
     logGroup.classList.toggle("hidden", tabId === "tabAbout" || TALL_TAB_IDS.has(tabId));
 
-    if (TALL_TAB_IDS.has(tabId) && !batch.open) {
+    if (TALL_TAB_IDS.has(tabId)) {
         // 面板显示后测量一次；命中高度缓存时直接到位，避免多次 SetSize 造成卡顿。
         requestAnimationFrame(() => resizePanelWindow().catch(showError));
-    } else if (!batch.open && lastPanelHeight !== SINGLE_SIZE.height) {
+    } else if (lastPanelHeight !== SINGLE_SIZE.height) {
         lastPanelHeight = SINGLE_SIZE.height;
         setWindowSize(SINGLE_SIZE).catch(showError);
     }
-
-    // 离开批量任务所属页面时收起面板，避免跨页操作队列。
-    if (batch.open && tabId !== "tabEnc") closeBatch();
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -248,417 +243,11 @@ el("decryptBtnD").addEventListener("click", async () => {
     }
 });
 
-// 加密页配置：文件与文件夹合并为同一页，类型由后端自动识别。
-const encPage = {
-    src: el("encSrc"),
-    out: el("encOut"),
-    del: el("encDelete"),
-    fill: el("encFill"),
-    text: el("encText"),
-    start: el("encStart"),
-    decrypt: el("encDecrypt"),
-    pick: el("encPick"),
-    batch: el("encBatch"),
-    needMsg: "msg.needSource",
-};
-
-// ================= 批量任务 =================
-// 队列只在前端维护：单线程串行调用现有单任务接口，暂停/删除仅作用于排队中的任务。
-// 批量态只向右扩宽，高度与常规态一致，避免鼠标下的按钮上下跳动。
-const BATCH_SIZE = { width: 576, height: 400 };
+// 内容较高的页面按内容增高：高度只测量一次并缓存，后续切换直接到位。
 const SINGLE_SIZE = { width: 414, height: 400 };
-
-const batchPanel = el("batchPanel");
-const batchTasksBox = el("batchTasks");
-const batchEmpty = el("batchEmpty");
-const batchModeLabel = el("batchMode");
-const batchGridBtn = el("batchGridBtn");
-const batchListBtn = el("batchListBtn");
-
-const batch = {
-    open: false,
-    view: "grid",       // grid | list
-    mode: "",           // "" | encrypt | decrypt，由第一个任务决定
-    tasks: [],           // 文件与文件夹共用同一队列
-    running: false,
-    total: 0,           // 启动时冻结，暂停/删除时递减
-    done: 0,
-    currentId: "",
-};
-
-function batchList() {
-    return batch.tasks;
-}
-
-function readBatchSettings() {
-    // 批量入口固定开启；迁移旧配置时同步写入两个兼容字段。
-    return { file: true, folder: true };
-}
-
-function baseName(path) {
-    const clean = String(path).replace(/[\\/]+$/, "");
-    const index = Math.max(clean.lastIndexOf("\\"), clean.lastIndexOf("/"));
-    return index >= 0 ? clean.slice(index + 1) : clean;
-}
-
-function sameSource(a, b) {
-    return a.replace(/[\\/]+$/, "").toLowerCase() === b.replace(/[\\/]+$/, "").toLowerCase();
-}
-
-function isSubPath(parent, child) {
-    const p = String(parent).replace(/[\\/]+$/, "").toLowerCase();
-    const c = String(child).replace(/[\\/]+$/, "").toLowerCase();
-    return c.startsWith(p + "\\") || c.startsWith(p + "/");
-}
-
-function taskTitle(task) {
-    const percent = task.state === "running" ? " · " + task.percent + "%" : "";
-    return task.name + percent + (task.error ? " · " + task.error : "");
-}
-
-// 第一个任务决定批量性质；之后类型不符直接拒绝。
-async function checkBatchPath(probe, list) {
-    if (!probe.Exists) {
-        return { ok: false, reason: t("batch.errMissing", { name: baseName(probe.Path) }) };
-    }
-    if (probe.Kind === "other") {
-        return { ok: false, reason: t("batch.errOther", { name: baseName(probe.Path) }) };
-    }
-
-    const mode = probe.Kind === "junx" ? "decrypt" : "encrypt";
-    if (batch.mode && batch.mode !== mode) {
-        return {
-            ok: false,
-            reason: t(batch.mode === "encrypt" ? "batch.errModeEncrypt" : "batch.errModeDecrypt", {
-                name: baseName(probe.Path),
-            }),
-        };
-    }
-
-    if (list.some((task) => sameSource(task.source, probe.Path))) {
-        return { ok: false, reason: t("batch.errDuplicate", { name: baseName(probe.Path) }) };
-    }
-
-    if (mode === "encrypt" && probe.OutputExists) {
-        return { ok: false, reason: t("batch.errOutputExists", { name: probe.OutputPath }) };
-    }
-
-    if (mode === "encrypt") {
-        // 新路径落在已有任务内部时直接拒绝，避免父子路径被重复打包。
-        if (list.some((task) => isSubPath(task.source, probe.Path))) {
-            return { ok: false, reason: t("batch.errNested", { name: baseName(probe.Path) }) };
-        }
-        // 新路径包含已有任务时询问是否移除子任务，只打包父路径。
-        const parents = list.filter((task) => isSubPath(probe.Path, task.source));
-        if (parents.length) {
-            const merge = await askMerge(probe.Path, parents.length);
-            if (!merge) {
-                return { ok: false, reason: t("batch.errMergeCanceled", { name: baseName(probe.Path) }) };
-            }
-            parents.forEach((task) => removeTaskSilently(task.id));
-        }
-    }
-    return { ok: true, mode };
-}
-
-async function askMerge(path, count) {
-    try {
-        const yes = t("btn.merge");
-        const answer = await Dialogs.Question({
-            Title: t("batch.mergeTitle"),
-            Message: t("batch.mergeMessage", { name: baseName(path), count }),
-            Buttons: [
-                { Label: yes, IsDefault: true },
-                { Label: t("btn.cancel"), IsCancel: true },
-            ],
-        });
-        return answer === yes;
-    } catch (_) {
-        return false;
-    }
-}
-
-async function addBatchPaths(paths) {
-    if (batch.running) {
-        showError(t("batch.errRunning"));
-        return;
-    }
-    let probes = [];
-    try {
-        probes = await FolderService.ProbePaths(paths);
-    } catch (err) {
-        showError(err);
-        return;
-    }
-
-    const list = batchList();
-    for (const probe of probes) {
-        const verdict = await checkBatchPath(probe, list);
-        if (!verdict.ok) {
-            appendLog("[WARN] " + verdict.reason);
-            continue;
-        }
-        list.push({
-            id: "t" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            source: probe.Path,
-            name: baseName(probe.Path),
-            state: "pending",
-            percent: 0,
-            phase: "",
-            error: "",
-        });
-        if (!batch.mode) batch.mode = verdict.mode;
-    }
-    renderBatch();
-}
-
-function buildTaskButtons(task) {
-    const box = document.createElement("span");
-    box.className = "task-buttons";
-
-    const pause = document.createElement("button");
-    pause.type = "button";
-    pause.className = "task-pause" + (task.state === "paused" ? " resume" : "");
-    pause.title = t(task.state === "paused" ? "batch.resume" : "batch.pause");
-    pause.addEventListener("click", (event) => {
-        event.stopPropagation();
-        togglePause(task);
-    });
-
-    const del = document.createElement("button");
-    del.type = "button";
-    del.className = "task-del";
-    del.textContent = "×";
-    del.title = t("batch.remove");
-    del.addEventListener("click", (event) => {
-        event.stopPropagation();
-        removeTask(task.id);
-    });
-
-    box.append(pause, del);
-    return box;
-}
-
-function renderTile(task) {
-    const tile = document.createElement("div");
-    tile.className = "task-tile " + task.state;
-    tile.dataset.id = task.id;
-    tile.title = taskTitle(task);
-
-    const fill = document.createElement("div");
-    fill.className = "task-fill";
-    fill.style.height = task.percent + "%";
-    tile.appendChild(fill);
-
-    if (task.state !== "running") {
-        const hover = document.createElement("div");
-        hover.className = "task-hover";
-        hover.appendChild(buildTaskButtons(task));
-        tile.appendChild(hover);
-    }
-    return tile;
-}
-
-function renderRow(task) {
-    const row = document.createElement("div");
-    row.className = "task-row " + task.state;
-    row.dataset.id = task.id;
-    row.title = taskTitle(task);
-
-    const name = document.createElement("span");
-    name.className = "task-name";
-    name.textContent = task.name;
-    row.appendChild(name);
-
-    const bar = document.createElement("span");
-    bar.className = "task-bar";
-    const fill = document.createElement("span");
-    fill.className = "task-bar-fill";
-    fill.style.width = task.percent + "%";
-    bar.appendChild(fill);
-    row.appendChild(bar);
-
-    if (task.state !== "running") {
-        const actions = buildTaskButtons(task);
-        actions.classList.add("task-actions");
-        row.appendChild(actions);
-    }
-    return row;
-}
-
-function renderBatch() {
-    const list = batchList();
-    batchTasksBox.className = "batch-tasks " + batch.view;
-    batchTasksBox.replaceChildren();
-    list.forEach((task) => {
-        batchTasksBox.appendChild(batch.view === "grid" ? renderTile(task) : renderRow(task));
-    });
-    batchEmpty.classList.toggle("hidden", list.length > 0);
-
-    if (!list.length) {
-        batchModeLabel.textContent = t("batch.modeEmpty");
-    } else {
-        batchModeLabel.textContent = t(batch.mode === "decrypt" ? "batch.modeDecrypt" : "batch.modeEncrypt", {
-            count: list.length,
-        });
-    }
-    syncBatchControls();
-}
-
-function syncBatchControls() {
-    batchGridBtn.classList.toggle("active", batch.view === "grid");
-    batchListBtn.classList.toggle("active", batch.view === "list");
-    if (!batch.open) return;
-
-    const page = encPage;
-    const list = batchList();
-    if (batch.running) return;
-    // 批量性质确定后，另一个操作按钮不可用。
-    page.start.disabled = list.length > 0 && batch.mode === "decrypt";
-    page.decrypt.disabled = list.length > 0 && batch.mode === "encrypt";
-}
-
-function updateTaskVisual(task) {
-    const node = batchTasksBox.querySelector('[data-id="' + task.id + '"]');
-    if (!node) return;
-    const fill = node.querySelector(".task-fill, .task-bar-fill");
-    if (fill) {
-        if (batch.view === "grid") {
-            fill.style.height = task.percent + "%";
-        } else {
-            fill.style.width = task.percent + "%";
-        }
-    }
-    node.title = taskTitle(task);
-}
-
-function togglePause(task) {
-    if (task.state === "running") return;
-    if (task.state === "paused") {
-        task.state = "pending";
-        if (batch.running) batch.total += 1;
-    } else {
-        task.state = "paused";
-        if (batch.running) batch.total -= 1;
-    }
-    renderBatch();
-    refreshBatchProgress();
-}
-
-function removeTask(id) {
-    const list = batchList();
-    const index = list.findIndex((task) => task.id === id);
-    if (index < 0) return;
-    const [task] = list.splice(index, 1);
-    if (batch.running && task.state === "pending") batch.total -= 1;
-    if (!list.length) batch.mode = "";
-    renderBatch();
-    refreshBatchProgress();
-}
-
-function removeTaskSilently(id) {
-    const list = batchList();
-    const index = list.findIndex((task) => task.id === id);
-    if (index >= 0) list.splice(index, 1);
-}
-
-// 总进度：完成数 + 当前任务进度，分母是启动时冻结的总数（暂停/删除会从分母扣除）。
-function refreshBatchProgress() {
-    if (!batch.running) return;
-    const page = encPage;
-    const current = batchList().find((task) => task.id === batch.currentId);
-    const percent = current ? current.percent : 0;
-    const value = batch.total > 0 ? Math.min(100, Math.round(((batch.done + percent / 100) / batch.total) * 100)) : 100;
-    page.fill.style.width = value + "%";
-    page.text.textContent = value + "% · " + batch.done + "/" + batch.total;
-}
-
-async function runBatch(kind) {
-    if (batch.running) return;
-    const page = encPage;
-    const list = batchList();
-    if (!list.length) {
-        showError(t("batch.errEmpty"));
-        return;
-    }
-    if (batch.mode && batch.mode !== kind) {
-        showError(t(batch.mode === "encrypt" ? "batch.errRunEncrypt" : "batch.errRunDecrypt"));
-        return;
-    }
-
-    batch.running = true;
-    batch.done = 0;
-    // 只统计本次真正会执行的排队任务：暂停与上一轮失败的任务都不计入。
-    batch.total = list.filter((task) => task.state === "pending").length;
-    batch.currentId = "";
-    if (batch.total === 0) {
-        batch.running = false;
-        showError(t("batch.errNoPending"));
-        return;
-    }
-
-    setBusy(page, true);
-    page.batch.disabled = true;
-    page.fill.style.width = "0%";
-    page.text.textContent = "0% · 0/" + batch.total;
-
-    try {
-        while (true) {
-            const task = batchList().find((item) => item.state === "pending");
-            if (!task) break;
-            task.state = "running";
-            task.percent = 0;
-            batch.currentId = task.id;
-            renderBatch();
-            try {
-                if (kind === "encrypt") {
-                    // 统一入口：容器类型由后端探测源文件/文件夹后决定。
-                    await FolderService.EncryptPath(task.source, "", false, getLocale());
-                } else {
-                    // 通用解密：容器里是文件还是文件夹由清单决定。
-                    await FolderService.DecryptJunx(task.source);
-                }
-                removeTaskSilently(task.id);
-                batch.done += 1;
-            } catch (err) {
-                task.state = "error";
-                task.percent = 100;
-                task.error = err && err.message ? err.message : String(err);
-                batch.done += 1;
-                appendLog("[ERROR] " + task.error);
-            }
-            batch.currentId = "";
-            if (!batchList().length) batch.mode = "";
-            renderBatch();
-            refreshBatchProgress();
-        }
-    } finally {
-        batch.running = false;
-        batch.currentId = "";
-        setBusy(page, false);
-        applyBatchUI();
-        page.batch.disabled = false;
-        renderBatch();
-        const value = batch.total > 0 ? 100 : 0;
-        page.fill.style.width = value + "%";
-        page.text.textContent = value + "% · " + batch.done + "/" + batch.total;
-    }
-}
-
-// 批量态：源输入框变成三倍高的拖入区，浏览/输出名称/删除原件全部禁用。
-function applyBatchUI() {
-    const open = batch.open;
-    batchPanel.classList.toggle("hidden", !open);
-    document.body.classList.toggle("batch-mode", open);
-
-    encPage.src.classList.toggle("batch-drop", open);
-    encPage.src.readOnly = open;
-    encPage.out.disabled = open;
-    encPage.del.disabled = open;
-    encPage.pick.disabled = open;
-    encPage.batch.classList.toggle("active", open);
-    encPage.src.placeholder = open ? t("placeholder.batchDrop") : t("placeholder.sourcePath");
-}
+let lastPanelHeight = SINGLE_SIZE.height;
+let panelResizeTimer = 0;
+const panelHeightCache = new Map();
 
 async function setWindowSize(size) {
     try {
@@ -668,13 +257,8 @@ async function setWindowSize(size) {
     }
 }
 
-// 内容较高的页面按内容增高：高度只测量一次并缓存，后续切换直接到位。
-let lastPanelHeight = SINGLE_SIZE.height;
-let panelResizeTimer = 0;
-const panelHeightCache = new Map();
-
 async function resizePanelWindow() {
-    if (!TALL_TAB_IDS.has(currentTab) || batch.open) return;
+    if (!TALL_TAB_IDS.has(currentTab)) return;
     const cached = panelHeightCache.get(currentTab);
     if (cached !== undefined) {
         if (lastPanelHeight !== cached) {
@@ -684,7 +268,6 @@ async function resizePanelWindow() {
         return;
     }
     const panel = el(currentTab);
-    // 删除底部提示行后，只需测量面板底部是否越过窗口边界。
     const neededBottom = panel.getBoundingClientRect().bottom + 8;
     const delta = Math.ceil(neededBottom - window.innerHeight);
     const target = Math.max(SINGLE_SIZE.height, lastPanelHeight + delta);
@@ -695,7 +278,7 @@ async function resizePanelWindow() {
 }
 
 function schedulePanelResize() {
-    if (!TALL_TAB_IDS.has(currentTab) || batch.open) return;
+    if (!TALL_TAB_IDS.has(currentTab)) return;
     clearTimeout(panelResizeTimer);
     panelResizeTimer = setTimeout(() => {
         resizePanelWindow().catch(showError);
@@ -709,48 +292,43 @@ if (typeof ResizeObserver !== "undefined") {
     });
 }
 
-async function openBatch() {
-    if (batch.open) return;
-    if (batch.running) return;
-    if (activeProgress) {
-        showError(t("msg.busy"));
-        return;
-    }
-    batch.open = true;
-    switchTab("tabEnc");
-    applyBatchUI();
-    renderBatch();
-    resetProgress(encPage);
-    await setWindowSize(BATCH_SIZE);
-}
-
-async function closeBatch() {
-    if (!batch.open || batch.running) return;
-    batch.open = false;
-    applyBatchUI();
-    renderBatch();
-    await setWindowSize(SINGLE_SIZE);
-}
+// 加密页配置：文件与文件夹合并为同一页，类型由后端自动识别。
+const encPage = {
+    src: el("encSrc"),
+    out: el("encOut"),
+    del: el("encDelete"),
+    text: el("encText"),
+    start: el("encStart"),
+    decrypt: el("encDecrypt"),
+    pick: el("encPick"),
+    batch: el("encBatch"),
+    needMsg: "msg.needSource",
+};
 
 // 同一时间只允许一个加解密任务，进度事件据此决定更新哪一页。
 let activeProgress = null;
 
+// 单任务进度：用固定宽度的文本条显示，不再使用图形进度条。
+function formatProgress(value, label) {
+    const bars = Math.round(value / 5);
+    const line = "#".repeat(bars) + "-".repeat(20 - bars) + " " + value + "%";
+    return label ? line + " · " + label : line;
+}
+
 function resetProgress(page) {
-    page.fill.style.width = "0%";
-    page.text.textContent = t("progress.idle");
+    page.text.textContent = formatProgress(0, t("progress.idle"));
     page.text.title = "";
 }
 
 function updateProgress(page, percent, phase) {
     const value = Math.max(0, Math.min(100, Math.round(percent)));
-    page.fill.style.width = value + "%";
     if (value >= 100) {
-        page.text.textContent = "100% · " + t("progress.done");
+        page.text.textContent = formatProgress(100, t("progress.done"));
         page.text.title = "";
         return;
     }
     const label = phase ? t("progress." + phase) : "";
-    page.text.textContent = label ? value + "% · " + label : value + "%";
+    page.text.textContent = formatProgress(value, label);
     page.text.title = label;
 }
 
@@ -902,25 +480,26 @@ encPage.src.addEventListener("change", () => {
     applyDeleteRisk(encPage.src.value.trim(), true).catch(showError);
 });
 
-encPage.start.addEventListener("click", () => {
-    if (batch.open) {
-        runBatch("encrypt");
+encPage.start.addEventListener("click", () => runEncrypt(encPage));
+encPage.decrypt.addEventListener("click", () => runDecrypt(encPage));
+
+// 打开批量窗口：把当前未开始的目标路径作为种子移交，随后最小化主窗口。
+encPage.batch.addEventListener("click", async () => {
+    if (activeProgress) {
+        showError(t("msg.busy"));
         return;
     }
-    runEncrypt(encPage);
-});
-encPage.decrypt.addEventListener("click", () => {
-    if (batch.open) {
-        runBatch("decrypt");
-        return;
-    }
-    runDecrypt(encPage);
-});
-encPage.batch.addEventListener("click", () => {
-    if (batch.open) {
-        closeBatch();
-    } else {
-        openBatch();
+    const seed = encPage.src.value.trim();
+    try {
+        await FolderService.OpenBatchWindow(seed ? [seed] : []);
+        if (seed) {
+            encPage.src.value = "";
+            encPage.out.value = "";
+            resetProgress(encPage);
+        }
+        await Window.Minimise();
+    } catch (err) {
+        showError(err);
     }
 });
 
@@ -1306,12 +885,8 @@ onLocaleChange(() => {
         createPinBoxes(confirmPinBoxes, PIN_LENGTH);
         syncPinSetupEditable();
     }
-    if (!activeProgress && !batch.running) {
+    if (!activeProgress) {
         resetProgress(encPage);
-    }
-    if (batch.open) {
-        applyBatchUI();
-        renderBatch();
     }
 });
 
@@ -1440,11 +1015,6 @@ resetConfigBtn.addEventListener("click", async () => {
         const level = ["off", "trace", "debug", "normal"].includes(info.logLevel) ? info.logLevel : "normal";
         logLevelSelect.value = level;
         previousLogLevel = level;
-        // 批量入口固定显示，旧配置里的关闭状态在这里顺带纠正。
-        encPage.batch.classList.remove("hidden");
-        if (!info.batchFile || !info.batchFolder) {
-            await FolderService.SetBatchSettings(true, true);
-        }
         await applyPinTop(typeof info.alwaysOnTop === "boolean" ? info.alwaysOnTop : readPinTop());
         const state = await FolderService.GetPinState();
         applyPinState(state);
@@ -1500,53 +1070,18 @@ Events.On(FolderProgress, (event) => {
     const percent = Number(data.Percent ?? data.percent ?? 0);
     const phase = data.Phase || data.phase || "";
 
-    // 批量运行中：事件属于当前子任务，同时刷新子任务与总进度。
-    if (batch.running && batch.currentId) {
-        const task = batchList().find((item) => item.id === batch.currentId);
-        if (task) {
-            task.percent = Math.max(0, Math.min(100, Math.round(percent)));
-            task.phase = phase;
-            updateTaskVisual(task);
-        }
-        refreshBatchProgress();
-        return;
-    }
-
     if (!activeProgress) return;
     updateProgress(activeProgress, percent, phase);
 });
 
-// 拖放文件到窗口：按落点元素决定填哪个输入框；批量面板展开时全部转成任务。
+// 拖放文件到主窗口：只接收主窗口事件，填加密页目标路径。
 Events.On(FilesDropped, async (event) => {
     const data = event.data || {};
     const paths = data.Paths || data.paths || [];
     if (!Array.isArray(paths) || paths.length === 0) return;
-    const target = data.Target || data.target || "";
-
-    if (target !== "encDrop" && currentTab !== "tabEnc") return;
-
-    if (batch.open) {
-        // 批量面板展开时拖入的内容全部进入当前队列。
-        await addBatchPaths(paths);
-        return;
-    }
     if (activeProgress) return;
-
-    // 拖入新路径：复位进度并重新判定删除风险。
     setEncSource(paths[0]);
     switchTab("tabEnc");
-});
-
-// 批量入口固定开启，界面不再提供关闭开关。
-encPage.batch.classList.remove("hidden");
-
-batchGridBtn.addEventListener("click", () => {
-    batch.view = "grid";
-    renderBatch();
-});
-batchListBtn.addEventListener("click", () => {
-    batch.view = "list";
-    renderBatch();
 });
 
 async function init() {
@@ -1571,11 +1106,6 @@ async function init() {
         const level = ["off", "trace", "debug", "normal"].includes(info.logLevel) ? info.logLevel : "normal";
         logLevelSelect.value = level;
         previousLogLevel = level;
-        // 批量入口固定显示，旧配置里的关闭状态在这里顺带纠正。
-        encPage.batch.classList.remove("hidden");
-        if (!info.batchFile || !info.batchFolder) {
-            await FolderService.SetBatchSettings(true, true);
-        }
         await applyPinTop(typeof info.alwaysOnTop === "boolean" ? info.alwaysOnTop : readPinTop());
     } else {
         langSelect.value = getLocale();

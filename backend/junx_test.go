@@ -199,6 +199,19 @@ func TestJunxOutputPath(t *testing.T) {
 	}
 }
 
+func TestJunxOutputPathIn(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "报告.docx")
+	outDir := filepath.Join(t.TempDir(), "输出")
+
+	got, err := junxOutputPathIn(src, "", outDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Dir(got) != outDir || filepath.Base(got) != "报告.docx.junx" {
+		t.Fatalf("自定义输出目录错误: %s", got)
+	}
+}
+
 func TestJunxSafeRelPath(t *testing.T) {
 	if _, err := safeRelPath("../evil.txt"); err == nil {
 		t.Fatalf("应拒绝 .. 路径")
@@ -351,6 +364,35 @@ func TestServiceJunxOutputExistsRejected(t *testing.T) {
 	}
 }
 
+func TestServiceOutputDirFlow(t *testing.T) {
+	service := newTestService(t)
+	root := t.TempDir()
+	src := filepath.Join(root, "note.txt")
+	mustWrite(t, src, "hello")
+
+	encDir := filepath.Join(root, "enc")
+	decDir := filepath.Join(root, "dec")
+	if err := service.EncryptPathEx("task-encrypt", src, "", encDir, false, "zh-CN"); err != nil {
+		t.Fatalf("加密到自定义目录失败: %v", err)
+	}
+	junx := filepath.Join(encDir, "note.txt.junx")
+	if _, err := os.Stat(junx); err != nil {
+		t.Fatalf("加密产物未写入输出目录: %v", err)
+	}
+
+	if err := service.DecryptJunxToDir("task-decrypt", junx, decDir); err != nil {
+		t.Fatalf("解密到自定义目录失败: %v", err)
+	}
+	target := filepath.Join(decDir, "note.txt")
+	content, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatalf("解密产物未写入输出目录: %v", err)
+	}
+	if string(content) != "hello" {
+		t.Fatalf("解密内容错误: %q", string(content))
+	}
+}
+
 func TestProbePaths(t *testing.T) {
 	service := newTestService(t)
 	dir := t.TempDir()
@@ -368,7 +410,7 @@ func TestProbePaths(t *testing.T) {
 	junx := filepath.Join(dir, "b.txt.junx")
 
 	missing := filepath.Join(dir, "missing.txt")
-	probes := service.ProbePaths([]string{file, folder, junx, missing})
+	probes := service.ProbePaths([]string{file, folder, junx, missing}, "")
 	if len(probes) != 4 {
 		t.Fatalf("探测数量不对: %d", len(probes))
 	}
@@ -387,7 +429,7 @@ func TestProbePaths(t *testing.T) {
 
 	// 目标已存在时应标记 OutputExists，供前端做同名拦截。
 	mustWrite(t, file+junxExt, "occupied")
-	again := service.ProbePaths([]string{file})
+	again := service.ProbePaths([]string{file}, "")
 	if !again[0].OutputExists {
 		t.Fatalf("同名产物未被识别: %+v", again[0])
 	}

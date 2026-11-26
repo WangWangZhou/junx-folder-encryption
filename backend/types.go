@@ -14,6 +14,7 @@ const HideSuffix = ".."
 // JunxProgress 是加密/解密进度事件载荷。
 // Phase 使用固定代码（scan/build/encrypt/write/verify/extract/done），由前端翻译。
 type JunxProgress struct {
+	TaskID  string // 批量任务 ID；单任务调用为空，前端据此区分并发进度流
 	Percent int
 	Phase   string
 	Current string
