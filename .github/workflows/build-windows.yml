@@ -15,7 +15,7 @@ jobs:
       CGO_ENABLED: "0"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # tag 与 build/config.yml 的 version 必须一致，否则产物属性与 tag 对不上
       - name: Verify tag matches build/config.yml
@@ -33,13 +33,13 @@ jobs:
           f=".github/release-notes/${GITHUB_REF_NAME}.md"
           [ -f "$f" ] || { echo "::error::缺少 $f"; exit 1; }
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
 
       # 仅用于 frontend 构建，website 不参与
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -52,18 +52,56 @@ jobs:
         shell: bash
         run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      - name: Ensure NSIS
+      # windows-latest 已切到 Server 2025 镜像：NSIS 可能已预装但不在 PATH，
+      # 而 choco 安装也不会写 PATH，因此这里必须先定位、必要时安装，再显式写入 GITHUB_PATH。
+      - name: Ensure NSIS in PATH
         shell: pwsh
         run: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
-            choco install nsis -y --no-progress
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS",
+            "$env:ProgramFiles\NSIS",
+            "C:\Program Files (x86)\NSIS",
+            "C:\Program Files\NSIS"
+          ) | Where-Object { $_ } | Select-Object -Unique
+
+          function Find-NsisDir {
+            foreach ($dir in $candidates) {
+              if (Test-Path (Join-Path $dir 'makensis.exe')) { return $dir }
+            }
+            $cmd = Get-Command makensis.exe -ErrorAction SilentlyContinue
+            if ($cmd) { return (Split-Path $cmd.Source -Parent) }
+            return $null
           }
 
-      # package 内部依赖 build，一次产出单文件 exe 与 NSIS 安装包
-      - name: Build and package (Windows amd64)
+          $nsisDir = Find-NsisDir
+          if (-not $nsisDir) {
+            Write-Host 'makensis.exe 未找到，开始安装 NSIS...'
+            choco install nsis -y --no-progress
+            $nsisDir = Find-NsisDir
+          }
+          if (-not $nsisDir) { throw '安装后仍未找到 makensis.exe，NSIS 不可用' }
+
+          Write-Host "NSIS 目录: $nsisDir"
+          $nsisDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # 同一 step 内后续命令需要用当前进程的 PATH
+          $env:PATH = "$nsisDir;$env:PATH"
+
+          $version = & (Join-Path $nsisDir 'makensis.exe') -VERSION
+          Write-Host "makensis 版本: $version"
+
+      # 单独一步构建，便于在日志中区分「编译失败」与「打包失败」
+      - name: Build (Windows amd64)
+        run: wails3 build GOOS=windows ARCH=amd64
+
+      # package 依赖 build，会复用上一步产物；同时产出单文件 exe 与 NSIS 安装包
+      - name: Package NSIS installer
         run: wails3 package GOOS=windows ARCH=amd64 INSTALL_SCOPE=machine
 
-      - uses: actions/upload-artifact@v4
+      - name: Show artifacts
+        shell: pwsh
+        run: Get-ChildItem bin | Format-Table Name, Length, LastWriteTime
+
+      - uses: actions/upload-artifact@v7
         with:
           name: my-folder-encryption-${{ github.ref_name }}
           path: |
@@ -72,7 +110,7 @@ jobs:
           if-no-files-found: error
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: ${{ github.ref_name }}
           body_path: .github/release-notes/${{ github.ref_name }}.md
@@ -80,3 +118,15 @@ jobs:
             bin/my-folder-encryption.exe
             bin/my-folder-encryption-amd64-installer.exe
           fail_on_unmatched_files: true
+
+      # 失败时打印关键环境信息，方便下次直接定位
+      - name: Diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Host '--- makensis ---'
+          Get-Command makensis.exe -ErrorAction SilentlyContinue | Format-List Name, Source
+          Write-Host '--- PATH ---'
+          $env:PATH -split ';'
+          Write-Host '--- bin ---'
+          if (Test-Path bin) { Get-ChildItem bin | Format-Table Name, Length }
