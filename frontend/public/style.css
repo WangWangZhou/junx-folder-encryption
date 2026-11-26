@@ -202,6 +202,9 @@ body {
 }
 
 .group {
+    /* 作为 .group-corner（如常规页退出按钮）的定位参照：
+       缺少这行时绝对定位会向上找到 .app，按钮跑到窗口右上角的标签栏上。 */
+    position: relative;
     margin: 0;
     padding: 6px 8px 7px;
     border: 1px solid var(--line);
@@ -678,15 +681,38 @@ select:focus {
     right: 6px;
 }
 
-/* 图标按钮：固定 20×20 点击区，去除文字按钮的内边距 */
-.icon-only {
+/* 图标按钮：固定 20×20 点击区，无边框透明底，悬停才显示点击区。
+   选择器必须带 .btn：否则 .btn.small 的 padding:0 8px 会覆盖 padding:0，
+   box-sizing:border-box 下 20px 宽只剩约 2px 内容区，SVG 会被压成一个小点。 */
+.btn.icon-only {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 20px;
     height: 20px;
     padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--text);
     line-height: 1;
+}
+.btn.icon-only svg {
+    display: block;
+    flex: none;
+    width: 15px;
+    height: 15px;
+}
+.btn.icon-only:hover {
+    border-color: var(--border);
+    background: #e4eef9;
+    color: var(--text);
+}
+.btn.icon-only:active {
+    background: #dfe8f3;
+}
+.btn.icon-only:focus-visible {
+    outline: 1px dotted var(--muted);
+    outline-offset: 1px;
 }
 
 .config-actions {
