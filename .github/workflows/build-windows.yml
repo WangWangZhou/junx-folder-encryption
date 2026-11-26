@@ -1,0 +1,82 @@
+name: build-windows
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      CGO_ENABLED: "0"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # tag 与 build/config.yml 的 version 必须一致，否则产物属性与 tag 对不上
+      - name: Verify tag matches build/config.yml
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver=$(grep -m1 '^  version:' build/config.yml | sed 's/.*"\([^"]*\)".*/\1/')
+          echo "tag=$tag config.yml=$ver"
+          [ "$tag" = "$ver" ] || { echo "::error::tag $tag 与 build/config.yml 的 $ver 不一致"; exit 1; }
+
+      # Release 正文来自仓库内的 notes 文件，缺失就直接失败，避免发出空 Release
+      - name: Verify release notes exist
+        shell: bash
+        run: |
+          f=".github/release-notes/${GITHUB_REF_NAME}.md"
+          [ -f "$f" ] || { echo "::error::缺少 $f"; exit 1; }
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # 仅用于 frontend 构建，website 不参与
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails v3 CLI
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+
+      - name: Add GOPATH/bin to PATH
+        shell: bash
+        run: echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Ensure NSIS
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            choco install nsis -y --no-progress
+          }
+
+      # package 内部依赖 build，一次产出单文件 exe 与 NSIS 安装包
+      - name: Build and package (Windows amd64)
+        run: wails3 package GOOS=windows ARCH=amd64 INSTALL_SCOPE=machine
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: my-folder-encryption-${{ github.ref_name }}
+          path: |
+            bin/my-folder-encryption.exe
+            bin/my-folder-encryption-amd64-installer.exe
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: .github/release-notes/${{ github.ref_name }}.md
+          files: |
+            bin/my-folder-encryption.exe
+            bin/my-folder-encryption-amd64-installer.exe
+          fail_on_unmatched_files: true

@@ -1,6 +1,6 @@
 // 站点全局数据：所有页面通过 import 引用。
 
-export const SITE_VERSION = "v1.1.0";
+export const SITE_VERSION = "v1.2.0";
 export const SITE_TITLE = `文件夹隐藏工具 ${SITE_VERSION}`;
 export const SITE_DESCRIPTION =
 	"文件夹隐藏工具：文件夹隐藏、文件与文件夹 AES-256-GCM 加密、批量任务与锁屏密码，Windows 10 / 11 桌面应用。";

@@ -2,7 +2,7 @@
 
 基于 **Wails 3 + Go** 的 Windows 桌面小工具：既可以让文件夹双击无法打开，也可以把单个文件或整个目录树用 **AES-256-GCM** 打包成 `.junx` 加密容器。界面提供简体中文 / English / 日本語三种语言。
 
-> 当前版本：`1.1.0`　|　平台：Windows 10 / 11（amd64）
+> 当前版本：`1.2.0`　|　平台：Windows 10 / 11（amd64）
 >
 > 完整文档：[产品文档站](https://junx-folder-encryption.workers.dev) · [下载发行版](https://github.com/WangWangZhou/junx-folder-encryption/releases) · [开发文档](https://junx-folder-encryption.workers.dev/dev/project-structure/)
 

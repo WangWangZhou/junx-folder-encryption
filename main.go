@@ -144,7 +144,7 @@ func main() {
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             mainWindowName,
-		Title:            "文件夹隐藏工具 v1.1.0",
+		Title:            "文件夹隐藏工具 v1.2.0",
 		Width:            bounds.Width,
 		Height:           bounds.Height,
 		MinWidth:         backend.MinWindowWidth,
